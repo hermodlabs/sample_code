@@ -11,7 +11,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { build, preview } from 'vite';
+import { build, createServer, preview } from 'vite';
 import { chromium } from 'playwright';
 import { runCLI } from '@decision-lab/cli';
 
@@ -19,7 +19,8 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const output = path.join(root, '.output');
 const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'reservation-desk-browser-'));
 const checks = [];
-let browser, server;
+const originalNodeEnv = process.env.NODE_ENV;
+let browser, server, devServer;
 
 const json = async filename => JSON.parse(await fs.readFile(filename, 'utf8'));
 const cells = row => Object.fromEntries(Object.entries(row.cells).map(([key, cell]) => [key, cell.raw]));
@@ -69,17 +70,48 @@ async function cliRun(caseFile, name) {
   return json(filename);
 }
 
-async function downloadReview(page) {
+async function downloadRun(page) {
   const [download] = await Promise.all([
     page.waitForEvent('download', { timeout: 45_000 }),
-    page.getByRole('button', { name: 'Download review', exact: true }).click({ timeout: 45_000 }),
+    page.getByRole('button', { name: 'Download SDK run', exact: true }).click({ timeout: 45_000 }),
   ]);
   const filename = await download.path();
   assert.ok(filename, 'The browser retained the complete review download.');
-  const review = await json(filename);
-  assert.equal(review.format, 'shipment-reservation-review/1');
-  assert.ok(review.run?.report, 'The review retains the complete SDK report, not just a display summary.');
-  return review;
+  const run = await json(filename);
+  assert.equal(run.format, 'decision-lab-run/1');
+  assert.ok(run.report, 'The download retains the native SDK report, not an application-specific wrapper.');
+  return run;
+}
+
+const reviewArrangements = page => page.getByRole('button', { name: 'Review arrangements', exact: true }).click({ timeout: 45_000 });
+
+/** Dispatch two user actions before the worker can deliver a result task. */
+async function interruptReview(page, action) {
+  await page.waitForFunction(() => [...document.querySelectorAll('button')]
+    .some(value => value.textContent.trim() === 'Review arrangements' && !value.disabled));
+  await page.evaluate(async action => {
+    const button = text => [...document.querySelectorAll('button')].find(value => value.textContent.trim() === text);
+    const review = button('Review arrangements');
+    if (!review || review.disabled) throw new Error('The current records must be ready for review.');
+    review.click();
+    // Flush the discrete React event update; worker messages arrive in later tasks.
+    await Promise.resolve();
+    if (action.kind === 'cancel') {
+      const cancel = button('Cancel review');
+      if (!cancel) throw new Error('The running review must offer cancellation.');
+      cancel.click();
+    } else if (action.kind === 'case') {
+      const next = [...document.querySelectorAll('button')].find(value => value.textContent.includes(action.label));
+      if (!next || next.disabled) throw new Error('A worked case must remain selectable while a review is running.');
+      next.click();
+    } else {
+      const label = [...document.querySelectorAll('label')].find(value => value.textContent === 'Complete quote amount');
+      const input = document.getElementById(label.htmlFor);
+      if (input.disabled || input.closest('fieldset')?.disabled) throw new Error('A changed record must be able to supersede a running review.');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, action.value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }, action);
 }
 
 async function assertPageFlow(page, viewport) {
@@ -130,12 +162,13 @@ try {
   const expected = { confirmed: ['consolidated'], revised: ['direct'], permissions: [] };
   for (const [id, preferred] of Object.entries(expected)) {
     await selectCase(id);
-    const review = await downloadReview(page);
+    await reviewArrangements(page);
+    const run = await downloadRun(page);
     const reference = await cliRun(path.join(root, `public/data/cases/${id}.json`), id);
-    const actual = outcome(review.run);
+    const actual = outcome(run);
     assert.deepEqual(actual, outcome(reference), `${id}: SDK browser and public CLI return the same costs, arrivals, eligibility, preference and failed conditions.`);
     assert.deepEqual(actual.plans.filter(plan => plan.preferred).map(plan => plan.arrangement).sort(), preferred);
-    assert.deepEqual(review.case, review.run.input.inputs, 'Downloaded inputs are exactly those evaluated.');
+    assert.deepEqual(run.input.inputs, await json(path.join(root, `public/data/cases/${id}.json`)), 'The native run retains exactly the selected complete case.');
     checks.push(`${id}: browser worker and CLI agree on every arrangement and failed condition`);
     if (id === 'confirmed') {
       await assertPageFlow(page, { width: 1440, height: 1000 });
@@ -147,46 +180,147 @@ try {
   }
 
   await selectCase('confirmed');
-  await downloadReview(page);
+  await reviewArrangements(page);
+  await downloadRun(page);
   await page.getByRole('button', { name: 'Consolidated', exact: true }).click();
   await page.getByLabel('Complete quote amount', { exact: true }).fill('5100');
-  assert.equal(await page.getByRole('button', { name: 'Download review', exact: true }).isDisabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Download SDK run', exact: true }).isDisabled(), true);
   await page.getByText('Records changed. Review again.', { exact: true }).waitFor();
   assert.equal(await page.getByRole('heading', { name: 'All arrangements', exact: true }).count(), 0, 'Superseded arrangements are not shown as a current result.');
   await page.getByRole('heading', { name: 'Last calculated proposal', exact: true }).waitFor();
-  await page.getByRole('button', { name: 'Review arrangements', exact: true }).click();
-  const changed = await downloadReview(page);
+  await reviewArrangements(page);
+  const changed = await downloadRun(page);
   const changedFile = path.join(temporary, 'changed-case.json');
-  await fs.writeFile(changedFile, JSON.stringify(changed.case));
-  assert.deepEqual(outcome(changed.run), outcome(await cliRun(changedFile, 'changed-quote')));
-  assert.deepEqual(outcome(changed.run).plans.filter(plan => plan.preferred).map(plan => plan.arrangement), ['direct']);
-  assert.ok(changed.previousRun, 'The earlier complete calculation is retained separately for comparison.');
+  await fs.writeFile(changedFile, JSON.stringify(changed.input.inputs));
+  assert.deepEqual(outcome(changed), outcome(await cliRun(changedFile, 'changed-quote')));
+  assert.deepEqual(outcome(changed).plans.filter(plan => plan.preferred).map(plan => plan.arrangement), ['direct']);
+  await page.getByRole('heading', { name: 'Last calculated proposal', exact: true }).waitFor();
   checks.push('A changed quote invalidates the displayed recommendation; reassessment agrees with the CLI and retains the earlier basis');
 
   await page.getByLabel('Quote currency', { exact: true }).selectOption('EUR');
-  await page.getByRole('button', { name: 'Review arrangements', exact: true }).click();
+  await reviewArrangements(page);
   await page.getByRole('alert').filter({ hasText: /USD/ }).waitFor();
-  assert.equal(await page.getByRole('button', { name: 'Download review', exact: true }).isDisabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Download SDK run', exact: true }).isDisabled(), true);
   assert.equal(await page.getByRole('heading', { name: 'All arrangements', exact: true }).count(), 0, 'Unsupported currency never falls back to an older favorable recommendation.');
   checks.push('Unsupported quote currency produces an input error and withholds the current review');
 
   await page.getByLabel('Import canonical case JSON', { exact: true }).setInputFiles(path.join(root, 'public/data/cases/revised.json'));
-  const imported = await downloadReview(page);
+  await reviewArrangements(page);
+  const imported = await downloadRun(page);
   const importedReference = await cliRun(path.join(root, 'public/data/cases/revised.json'), 'imported-case');
-  assert.deepEqual(outcome(imported.run), outcome(importedReference));
+  assert.deepEqual(outcome(imported), outcome(importedReference));
   checks.push('A complete canonical case can be imported and evaluated without changing its permission or confirmation scope');
   await screenshot(page, 'browser-imported.png');
+
+  await page.getByLabel('Import canonical case JSON', { exact: true }).setInputFiles({ name: 'bound.case.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(changed.input)) });
+  await page.waitForFunction(orderId => document.querySelector('[aria-label="Shipment commitment"]')?.textContent.includes(orderId), changed.input.inputs.parameters.orderId);
+  await reviewArrangements(page);
+  const bound = await downloadRun(page);
+  assert.deepEqual(bound.input.inputs, changed.input.inputs);
+  assert.deepEqual(outcome(bound), outcome(changed));
+  checks.push('A native SDK-bound case imports with its exact reviewed app binding and canonical inputs');
+
+  const wrongBinding = { ...bound.input, binding: { ...bound.input.binding, release: 999 } };
+  await page.getByLabel('Import canonical case JSON', { exact: true }).setInputFiles({ name: 'wrong-release.case.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(wrongBinding)) });
+  await page.getByRole('alert').waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Download SDK run', exact: true }).isDisabled(), true);
+  assert.equal(await page.getByRole('heading', { name: 'All arrangements', exact: true }).count(), 0);
+  checks.push('An SDK-bound case from a different release is rejected without reusing its saved result');
+
+  await selectCase('confirmed');
+  await interruptReview(page, { kind: 'cancel' });
+  await page.getByText('Records changed. Review again.', { exact: true }).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Download SDK run', exact: true }).isDisabled(), true);
+  assert.equal(await page.getByRole('heading', { name: 'All arrangements', exact: true }).count(), 0);
+
+  await page.getByRole('button', { name: 'Consolidated', exact: true }).click();
+  await interruptReview(page, { kind: 'edit', value: '4950' });
+  await page.getByText('Records changed. Review again.', { exact: true }).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Download SDK run', exact: true }).isDisabled(), true);
+  await reviewArrangements(page);
+  const latest = await downloadRun(page);
+  assert.equal(latest.input.inputs.tables.arrangements.find(row => row.id === 'consolidated').fee, 495000);
+  const latestFile = path.join(temporary, 'latest-case.json');
+  await fs.writeFile(latestFile, JSON.stringify(latest.input.inputs));
+  assert.deepEqual(outcome(latest), outcome(await cliRun(latestFile, 'latest-edit')));
+  checks.push('Cancellation and edits supersede an in-flight SDK job; only the latest reviewed records become current');
+
+  await interruptReview(page, { kind: 'case', label: config.cases.find(value => value.id === 'revised').label });
+  await reviewArrangements(page);
+  const switched = await downloadRun(page);
+  assert.deepEqual(switched.input.inputs, await json(path.join(root, 'public/data/cases/revised.json')));
+  assert.deepEqual(outcome(switched), outcome(importedReference));
+  checks.push('Switching cases during evaluation cancels the earlier job and retains only the selected shipment result');
+
+  await selectCase('confirmed');
+  await page.getByRole('button', { name: 'Direct', exact: true }).click();
+  await page.getByLabel('Complete quote amount', { exact: true }).fill('5000');
+  await page.getByLabel('Travel time (minutes)', { exact: true }).fill('2520');
+  await reviewArrangements(page);
+  const tied = await downloadRun(page);
+  const tiedFile = path.join(temporary, 'tied-case.json');
+  await fs.writeFile(tiedFile, JSON.stringify(tied.input.inputs));
+  assert.deepEqual(outcome(tied), outcome(await cliRun(tiedFile, 'tied-arrangements')));
+  assert.deepEqual(outcome(tied).plans.filter(plan => plan.preferred).map(plan => plan.arrangement), ['consolidated', 'direct']);
+  assert.equal(await page.locator('.proposed-plans > div').count(), 2, 'The team view retains the SDK preference tie rather than inventing a winner.');
+  checks.push('A genuine calculated preference tie is retained in both the native run and the team view');
 
   assert.ok(workers.length > 0, 'The real browser worker ran.');
   assert.ok(workers.every(url => url.startsWith(base) && new URL(url).pathname.startsWith('/assets/') && !url.includes('/src/')), `Workers are emitted production assets: ${JSON.stringify(workers)}`);
   assert.ok(requested.some(url => new URL(url).pathname.startsWith('/assets/') && url.endsWith('.js')), 'The production build serves the emitted JavaScript assets.');
   assert.deepEqual(errors, []);
   checks.push('Production worker assets load from the built client; desktop/mobile panels use normal page scrolling');
+
+  // React replays effect setup/cleanup in development StrictMode, not in a
+  // minified production build. Use the same entry point to check that lifecycle.
+  await context.close();
+  await new Promise(resolve => server.httpServer.close(resolve));
+  server = null;
+  // Vite's programmatic production build sets NODE_ENV in this process. Reset
+  // it deliberately so this second server actually serves development React.
+  process.env.NODE_ENV = 'development';
+  devServer = await createServer({ configFile: path.join(root, 'vite.config.mjs'), mode: 'development', server: { host: '127.0.0.1', port: 0, strictPort: false } });
+  await devServer.listen();
+  const devAddress = devServer.httpServer.address();
+  assert.ok(devAddress && typeof devAddress !== 'string');
+  const devBase = `http://127.0.0.1:${devAddress.port}/`;
+  const devContext = await browser.newContext({ acceptDownloads: true, serviceWorkers: 'block' });
+  await devContext.route('**/*', route => route.request().url().startsWith(devBase) ? route.continue() : route.abort());
+  const devPage = await devContext.newPage();
+  const devErrors = [], devRequests = [];
+  // Observe calls, not just network events: StrictMode may abort the first
+  // setup's fetch before Chrome emits a request event. Every invocation still
+  // delegates unchanged to the real browser fetch; no response is substituted.
+  await devPage.addInitScript(() => {
+    const original = window.fetch;
+    const calls = [];
+    Object.defineProperty(window, '__reservationDeskFetchCalls', { value: calls });
+    window.fetch = function (...args) {
+      calls.push(String(args[0]));
+      return Reflect.apply(original, this, args);
+    };
+  });
+  devPage.on('pageerror', error => devErrors.push(error.message));
+  devPage.on('request', request => devRequests.push(request.url()));
+  await devPage.goto(devBase);
+  await reviewArrangements(devPage);
+  const strictModeRun = await downloadRun(devPage);
+  assert.deepEqual(outcome(strictModeRun), outcome(await cliRun(path.join(root, 'public/data/cases/confirmed.json'), 'strict-mode')));
+  const configLoads = await devPage.evaluate(() => window.__reservationDeskFetchCalls.filter(url => new URL(url).pathname === '/data/config.json').length);
+  assert.ok(configLoads >= 2,
+    'Development StrictMode replays the initialization effect; the cleaned-up instance cannot publish into the current one.');
+  assert.ok(devRequests.some(url => new URL(url).pathname === '/data/config.json'), 'The current setup loads configuration from the real HTTP server.');
+  assert.deepEqual(devErrors, []);
+  checks.push('Development StrictMode effect cleanup/setup still produces a complete browser SDK run with CLI parity');
+  await devContext.close();
   const result = { suite: 'Shipment Reservation Desk production browser', checks, workers: workers.map(url => new URL(url).pathname) };
   await fs.writeFile(path.join(output, 'browser-results.json'), `${JSON.stringify(result, null, 2)}\n`);
   console.log(JSON.stringify(result, null, 2));
 } finally {
   if (browser) await browser.close();
   if (server?.httpServer.listening) await new Promise(resolve => server.httpServer.close(resolve));
+  if (devServer) await devServer.close();
+  if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = originalNodeEnv;
   await fs.rm(temporary, { recursive: true, force: true });
 }

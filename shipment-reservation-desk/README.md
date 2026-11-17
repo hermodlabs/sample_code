@@ -1,31 +1,18 @@
 # Shipment Reservation Desk
 
-A small React application for a logistics coordinator reviewing a shipment
-before putting an arrangement forward for reservation. It uses the public
-`@decision-lab/sdk` browser API and a pinned shipment app. The application has
-its own forms and report layout; shipment requirements and preference rules
-remain in the app configuration.
-
-The working situation is specific: an order has three complete arrangements,
-and Consolidated requires a confirmation covering the current order revision,
-ship point and loading interval. A coordinator receives a revised quote or
-confirmation and needs to reassess the arrangement without editing YAML.
-
-The inputs are fictional. The background is the
-[consolidated-freight example](https://www.hermodlabs.com/use-cases/supply-chain/shipment-readiness/add-consolidated-freight/)
-and the [8th & Walton supplier case study](https://www.8thandwalton.com/blog/case-study-walmart-launch),
-which describes order and freight-term corrections. This is a developer
-example, not a deployment for that supplier.
+A focused React example using `@decision-lab/sdk`: edit a shipment's quotes or
+consolidation confirmation, evaluate the recorded arrangements, and display the
+recommendation in a team-specific screen. React owns the form and presentation.
+The pinned shipment app supplies the requirements and preference rules.
 
 ## Run
 
-Use Node.js 22.19 or later; Node.js 24 is recommended. This directory is an
-independent npm project. React, Vite and the SDK are declared as normal npm
-dependencies. There are no aliases into the SDK source tree.
+Use Node.js 22.19 or later; Node.js 24 is recommended. This directory is a
+standalone npm project with normal React, Vite and SDK dependencies. It has no
+aliases into SDK source files and does not import the Decision Lab interface.
 
-The current `0.1.0` packages are local release candidates. Install the SDK and
-the CLI test dependency from matching archives; React and the build tools are
-ordinary npm dependencies:
+The current SDK and CLI packages are local `0.1.0` release candidates. Install
+matching archives; the CLI is a development dependency for the parity check:
 
 ```sh
 cd react-app/shipment-reservation-desk
@@ -35,13 +22,12 @@ npm install --no-save --package-lock=false \
 npm run dev
 ```
 
-In a Decision Lab source checkout, `npm run release:pack` creates candidate
-archives under `artifacts/npm/`. Once a compatible SDK is published, ordinary
-`npm install` resolves the declared package. The CLI package is not a runtime
-dependency of this React application; it is used only by the parity test.
+In the Decision Lab checkout, `npm run release:pack` creates archives under
+`artifacts/npm/`. Once compatible packages are published, ordinary `npm install`
+can resolve them. Keep the SDK's optional dependencies enabled: its browser
+entry includes workbook modules that Vite must resolve, even in this example.
 
-From the repository root, the development commands build the local SDK before
-starting this application:
+Repository-root commands build the local SDK before running the example:
 
 ```sh
 npm run dev:shipment:react
@@ -50,142 +36,109 @@ npm run test:shipment:react
 npm run test:shipment:react:browser
 ```
 
-`npm run build` in this directory creates the standalone production bundle.
-Use `npm run preview` to serve that bundle. Serve the generated files over HTTP;
-opening `dist/index.html` through `file://` cannot load the browser worker.
+For a production build from this directory, run `npm run build`, then
+`npm run preview`. Serve the generated files over HTTP; `file://` cannot load the
+browser worker.
 
-## What the coordinator does
+## Follow the SDK call
 
-1. Select one of the three prepared shipments, or import a complete case.
-2. Review the order revision, expense limit, receiving deadline and reservation
-   cutoff. These are the recorded basis, not approvals issued by this screen.
-3. Update an arrangement's complete quote or the consolidation confirmation.
-4. Run the review and inspect the recommendation, arrangement comparison and
-   unmet conditions. Compare the result with the earlier calculation.
-5. Download the case or complete review record for another tool or reviewer.
+Start with [`src/useShipmentReview.js`](src/useShipmentReview.js). Its
+**Review arrangements** event handler shows the integration directly:
 
-Editing a field makes the current calculation stale. The earlier result stays
-available as a comparison, but the screen does not present it as a current
-recommendation. An invalid entry or unfinished evaluation withholds the current
-recommendation instead of falling back to an earlier favorable result.
-
-| Prepared case | Expected result under the pinned rules |
-| --- | --- |
-| Confirmed slot · ORD-104 | Consolidated is preferred: $5,000, Thursday 6 p.m. |
-| Revised order · ORD-105 | The slot covers revision 1, while the order is revision 2. Consolidated is blocked; Direct is preferred: $4,000, Friday noon. |
-| Old permissions · ORD-106 | Selection and release permissions cover the old revision. No listed arrangement passes. |
-
-The fixed fixture clock is Tuesday, November 17, 2026. These are repeatable
-worked cases, not live reservation offers. See
-[the data notes](public/data/README.md) for their exact source and assumptions.
-
-## Integration boundary
-
-```text
-complete case + coordinator's record changes
-                    |
-                    v
-       parse forms and preserve record scope
-                    |
-                    v
-       SDK case binding and validation
-                    |
-                    v
-       SDK evaluation in a browser worker
-       using the pinned shipment app
-                    |
-                    v
-       complete prepared report output
-                    |
-                    v
-       team-specific comparison and handoff
+```js
+const inputs = buildCase(caseData, draft, config);
+const snapshot = lab.cases.create({ app, inputs });
+const validation = lab.cases.validate({ app, case: snapshot });
+// Show validation issues and return if invalid.
+const result = await lab.run({
+  app,
+  case: snapshot,
+  execution: { signal: controller.signal, timeoutMs: 15000 },
+  reportOptions: { scope: 'all', locale: 'en-US' },
+});
 ```
 
-The form maps values into canonical inputs. It does not decide whether a grant
-is sufficient, a slot is valid, a plan fits the expense limit, or an arrangement
-is preferred. Those conclusions come from the SDK's evaluation and prepared
-report. Business labels in `public/data/config.json` change presentation only.
+The hook creates `lab` with `createDecisionLab({ executor })` and
+`createBrowserExecutor()`. An effect owns and closes the worker, including React
+StrictMode's development cleanup cycle. Abort controllers and a request counter
+prevent superseded evaluations from replacing a newer form or case.
 
-The complete case already contains readiness records, roles, calendars,
-resources and permissions. A quote alone is insufficient. This screen edits
-only the advertised quote and confirmation fields. It never copies the current
-order revision onto an old permission or silently repairs a scope mismatch.
-Obtain a correctly scoped record or supply a separately reviewed complete case.
+SDK runs remain ordinary React state. `useMemo` derives the current and earlier
+summaries; there is no separate controller or application framework. Selecting
+or importing a case loads its form without running it. Evaluation is explicit.
+Editing immediately withholds the current recommendation and retains the last
+calculation as a comparison.
+
+[`src/shipment.js`](src/shipment.js) contains the form conversions and
+`summarizeRun()`. The summary uses the public
+`commitment.resolveCommitmentAssessment(run.assessment, run.report)` helper to
+read the SDK's plans, failed conditions, expenses, arrivals and preferred ties.
+It does not decode report internals or calculate shipment rules. Incomplete
+assessments withhold a recommendation; a complete result with no feasible
+arrangement is a valid business finding.
+
+[`src/App.jsx`](src/App.jsx) renders the hook's state using ordinary React
+components. `src/main.jsx` mounts the app; `src/styles.css` provides the
+responsive layout and normal page scrolling. Static configuration and complete
+cases live in `public/data/`.
+
+## Shipment context
+
+A logistics coordinator has three complete arrangements. Consolidated arrives
+earlier than Direct within the expense limit, but requires a confirmation for
+the current order revision, ship point and loading interval. Revised orders and
+updated records can therefore change the supported recommendation.
+
+The fictional cases demonstrate these outcomes after **Review arrangements**:
+
+| Prepared case | Expected result |
+| --- | --- |
+| Confirmed slot · ORD-104 | Consolidated is preferred: $5,000, Thursday 6 p.m. |
+| Revised order · ORD-105 | Current registration and permissions cover revision 2; the slot covers revision 1. Consolidated is blocked; Direct is preferred: $4,000, Friday noon. |
+| Old permissions · ORD-106 | Selection and release permissions cover the old revision. No listed arrangement passes. |
+
+The background is the
+[consolidated-freight example](https://www.hermodlabs.com/use-cases/supply-chain/shipment-readiness/add-consolidated-freight/)
+and the [8th & Walton supplier case study](https://www.8thandwalton.com/blog/case-study-walmart-launch),
+which describes order and freight-term corrections. These teaching records are
+not a deployment for that supplier. See [data notes](public/data/README.md) for
+fixture sources and the fixed November 17, 2026 review clock.
+
+## Records and reuse
+
+The complete case already contains readiness, resources, calendars and
+permissions. A quote alone is insufficient. The form changes only its quote
+and confirmation fields; it never rewrites an existing permission's scope to
+match a revised order. A replacement confirmation must retain its actual
+reference, scope and validity times.
 
 Quotes are complete USD shipment expenses, including preparation, release and
-transport. Amounts map to integer cents; there is no foreign-exchange conversion
-or implicit fee calculation. Model times are whole minutes from
-`2026-11-17T00:00:00-06:00`; the form and report use the configured fixed UTC
-offset. A different time convention requires an explicit adapter change.
+transport. Form amounts convert exactly to integer cents without currency
+conversion. Times are whole minutes from `2026-11-17T00:00:00-06:00`, displayed
+with the configured fixed offset. Business labels in `public/data/config.json`
+change presentation, not the rules.
 
-The report preserves preferred ties. A valid completed calculation with no
-feasible arrangement is a business result. Cancellation, truncation, missing
-report contexts or incomplete enumeration are unavailable results; a partial
-witness is not enough to select the best arrangement.
+Download **Case inputs** for canonical JSON that the CLI can validate and run.
+Download **SDK run** for the complete native `decision-lab-run/1` result. Import
+accepts raw canonical inputs or a `decision-lab-case/1` bound to the pinned app.
+Archived-run restoration and custom review bundles are outside this example.
+There is no automatic local-storage save; download inputs before leaving if
+you need to retain edits.
 
-## Portable review records
+Copy this directory to a team's repository, install the SDK, and replace the
+prepared case loader with the team's supported case source. Adapt the forms
+and labels while retaining the complete underlying case. To add a requirement,
+publish and verify a new app release and deliberately update the pin. A React
+filter applied after evaluation would introduce a second rule system.
 
-The screen evaluates a selected worked case on load. After an edit, use
-**Review arrangements** to request a new calculation. There is no automatic
-local-storage save: download a case or review record before leaving the page.
+The companion [CLI example](../../cli-app/shipment-exceptions/README.md)
+evaluates the same cases in batches. Tests cover form conversions, real SDK
+Node-worker outcomes, incomplete assessments and ties. Production browser
+checks exercise React editing, cancellation, case switching, downloads and
+agreement with the CLI.
 
-The case download contains canonical inputs, suitable for the CLI's case
-validation and run commands. The review download is a
-`shipment-reservation-review/1` JSON object containing `createdAt`, the exact
-`appPackage`, the canonical `case`, the complete SDK `run`, and `previousRun`
-when a comparison exists. JSON is a machine-readable exchange artifact; the
-screen renders the findings as business tables and explanations.
+Results still require human review. This screen does not authenticate
+permissions, obtain approval or reserve freight. Each case stipulates its own
+allocated resources; independent results do not prove several shipments can
+share trucks, docks, workers or cash concurrently.
 
-Import accepts a canonical case, an SDK `decision-lab-case/1` bound to this
-exact app, or a saved review record. A saved review must contain the pinned app
-and a valid run for the same inputs. Importing a record never installs a new
-app or changes rules. An incompatible binding or mismatched calculation is an
-input error, not a reason to reuse the saved recommendation.
-
-A complete blocked review can be downloaded. An unfinished calculation does
-not produce a current recommendation or a completed review download. The
-earlier complete calculation remains available as a comparison.
-
-## Files
-
-| File | Responsibility |
-| --- | --- |
-| `public/data/config.json` | Exact app binding, fixture locations, units, clock and business labels. |
-| `public/data/shipment-review.app.json` | Unmodified published shipment app package. |
-| `public/data/cases/` | Three complete canonical inputs, also reproducible through the CLI example. |
-| `src/model.mjs` | Map form values into case inputs without changing other records. |
-| `src/projection.mjs` | Project the prepared SDK report into the shipment comparison. |
-| `src/sdk.mjs` | Public SDK admission, execution, pinned bindings and review artifact validation. |
-| `src/controller.mjs` | Form state, evaluation lifecycle, cancellation and import/export. |
-| `src/main.jsx` | Browser worker, static case loader, file downloads and React mounting. |
-| `src/App.jsx` | Shipment-specific React screen. |
-| `src/styles.css` | Responsive layout with ordinary page scrolling. |
-| `test/` | Mapping and SDK checks, plus production browser coverage. |
-
-The browser receives the copied package as static data. Loading another app
-package does not automatically produce another suitable interface: this
-example's forms and report projection target the three-arrangement shipment
-profile. Broader domains need their own mappings and presentation.
-
-To add a business requirement, publish and verify a new app release and update
-the package pin deliberately. Do not implement a second rule in a React
-condition after the SDK has evaluated the case.
-
-## Reusing this example
-
-Copy this directory into a team's application repository and install the SDK.
-Replace the prepared case loader with the team's supported case source, then
-adapt the forms and presentation. Keep the full underlying case and preserve
-the source scope of confirmations and permissions.
-
-The companion [CLI application](../../cli-app/shipment-exceptions/README.md)
-imports company exports and evaluates independent shipments in a batch. Its
-canonical case artifacts provide the same input basis as these fixtures. The
-React example adds interactive record editing and a compact team view; it uses
-the same reasoning contract.
-
-Calculated recommendations require human review. This application does not
-authenticate permissions, obtain approvals, reserve freight or establish that
-work finished. It also does not allocate shared trucks, docks, workers or cash
-across shipments. Each fixture stipulates its own independent resources; use a
-combined planning model when those allocations compete.
