@@ -43,21 +43,52 @@
   "cases": [
     {
       "id": "confirmed",
-      "label": "Confirmed external booking \u00b7 GIFT-120",
+      "label": "Confirmed external booking · GIFT-120",
       "description": "Current permission and external booking. External replacement and repair should finish at minute 20.",
-      "url": "./cases/confirmed.json"
+      "url": "./cases/confirmed.json",
+      "scenarioGroup": "One-hour demo"
     },
     {
       "id": "stale",
-      "label": "Revised insert, older booking \u00b7 GIFT-121",
+      "label": "Revised insert, older booking · GIFT-121",
       "description": "The insert is now revision 4. Permissions cover revision 4, but the external booking still covers revision 3. In-house work should be preferred.",
-      "url": "./cases/stale.json"
+      "url": "./cases/stale.json",
+      "scenarioGroup": "One-hour demo"
     },
     {
       "id": "permissions",
-      "label": "Revised insert, older permissions \u00b7 GIFT-122",
+      "label": "Revised insert, older permissions · GIFT-122",
       "description": "The booking covers revision 4, but all package permissions still cover revision 3. No package should pass.",
-      "url": "./cases/permissions.json"
+      "url": "./cases/permissions.json",
+      "scenarioGroup": "One-hour demo"
+    },
+    {
+      "id": "one-day-confirmed",
+      "label": "One-day cutoff, current booking · GIFT-220",
+      "description": "A 24-hour handoff window with a ten-minute planned rehearsal. Existing short-lived records cover work starting now; external replacement and repair finishes at minute 25.",
+      "url": "./cases/one-day-confirmed.json",
+      "scenarioGroup": "One-day campaign"
+    },
+    {
+      "id": "one-day-stale",
+      "label": "One-day cutoff, older booking · GIFT-221",
+      "description": "A ten-minute rehearsal and a 24-hour handoff window do not cure the older insert revision on the external booking. In-house replacement and repair finishes at minute 40.",
+      "url": "./cases/one-day-stale.json",
+      "scenarioGroup": "One-day campaign"
+    },
+    {
+      "id": "one-day-expired",
+      "label": "Late start, expired records · GIFT-222",
+      "description": "The review and only candidate start are at minute 1,380, with handoff due at minute 1,440. Original production availability and permissions end at minute 120; the external booking ends at minute 60. No package is eligible.",
+      "url": "./cases/one-day-expired.json",
+      "scenarioGroup": "One-day campaign"
+    },
+    {
+      "id": "one-day-late",
+      "label": "Late start, renewed records · GIFT-223",
+      "description": "The review and only candidate start are at minute 1,380. Explicit fictional production availability, permissions, and external booking cover work through minute 1,440. External replacement and repair finishes at minute 1,405.",
+      "url": "./cases/one-day-late.json",
+      "scenarioGroup": "One-day campaign"
     }
   ],
   "appFile": "gifting.app.json"

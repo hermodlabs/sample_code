@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createDecisionLab } from '@decision-lab/sdk';
 import { createBrowserExecutor } from '@decision-lab/sdk/browser';
-import { buildCase, summarizeRun, toDraft } from './gifting.js';
+import { buildCase, readTimingPolicy, summarizeRun, toDraft } from './gifting.js';
 
 const configURL = new URL(`${import.meta.env.BASE_URL}data/config.json`, document.baseURI);
 
@@ -28,6 +28,7 @@ function download(filename, artifact, lab) {
 export default function useGiftReview() {
   const [config, setConfig] = useState(null);
   const [app, setApp] = useState(null);
+  const [policy, setPolicy] = useState(null);
   const [selectedCaseId, setSelectedCaseId] = useState('');
   const [caseData, setCaseData] = useState(null);
   const [draft, setDraft] = useState(null);
@@ -53,6 +54,7 @@ export default function useGiftReview() {
       try {
         const settings = await readJSON(configURL, controller.signal);
         const opened = lab.apps.open(await readJSON(new URL(settings.appUrl, configURL), controller.signal));
+        const timingPolicy = readTimingPolicy(opened);
         const binding = lab.cases.create({ app: opened }).binding;
         for (const [key, value] of Object.entries(settings.binding)) {
           if (binding[key] !== value) throw new Error(`The app does not match the configured ${key}.`);
@@ -69,6 +71,7 @@ export default function useGiftReview() {
         if (token !== requestId.current) return;
         setConfig(settings);
         setApp(opened);
+        setPolicy(timingPolicy);
         setCaseData(snapshot.inputs);
         setDraft(form);
         setSelectedCaseId(entry.id);
@@ -143,6 +146,22 @@ export default function useGiftReview() {
   function editConfirmation(field, value) {
     edited();
     setDraft(form => ({ ...form, confirmation: { ...form.confirmation, [field]: value } }));
+  }
+
+  function editSetup(field, value) {
+    edited();
+    setDraft(form => ({ ...form, setup: { ...form.setup, [field]: value } }));
+  }
+
+  function editAvailability(table, index, field, value) {
+    edited();
+    setDraft(form => ({
+      ...form,
+      availability: {
+        ...form.availability,
+        [table]: form.availability[table].map((row, position) => position === index ? { ...row, [field]: value } : row),
+      },
+    }));
   }
 
   // The SDK, rather than React, checks all retained fault possibilities and
@@ -228,11 +247,12 @@ export default function useGiftReview() {
   const earlier = useMemo(() => previousRun && summarizeRun(previousRun, config), [previousRun, config]);
 
   return {
-    config, cases: config?.cases ?? [], selectedCaseId, caseData, draft, status, issues,
+    config, policy, cases: config?.cases ?? [], selectedCaseId, caseData, draft, status, issues,
     current: status === 'complete' ? summary : null,
     before: status === 'complete' ? earlier : summary,
     run, previousRun,
-    selectCase, editQuote, editConfirmation, evaluate, cancel, importCaseText, downloadCase,
+    selectCase, editQuote, editConfirmation, editSetup, editAvailability,
+    evaluate, cancel, importCaseText, downloadCase,
     downloadRun() {
       if (status === 'complete') download(`${caseData.id}-run.json`, run, labRef.current);
     },

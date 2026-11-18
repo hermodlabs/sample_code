@@ -30,6 +30,14 @@ test('the actual CLI compares all fault scenarios and exports cases for the Reac
   assert.equal(stale.review.preferred[0].expense, 30000);
   assert.equal(stale.review.preferred[0].finishMinute, 35);
   assert.equal(stale.review.scenarioCount, 8);
+  assert.equal(result.manifest.policy.minimumRehearsalMinutes, 5);
+  assert.deepEqual(confirmed.review.timing, {
+    nowMinute: 0, handoffDeadlineMinute: 60, rehearsalMinutes: 5,
+    handoffMinutes: 5, startOptions: [0],
+  });
+  assert.equal(confirmed.review.preferred[0].deadlineSlackMinute, 40);
+  assert.equal(confirmed.basis.confirmations[0].validThrough, 60);
+  assert.equal(confirmed.basis.permissions[0].validThrough, 120);
   assert.equal(permissions.status, 'blocked');
   assert.deepEqual(permissions.review.preferredIds, []);
   assert.match(invalid.messages.join(' '), /budgetMinor/);
@@ -49,6 +57,66 @@ test('the actual CLI compares all fault scenarios and exports cases for the Reac
   for (const name of ['confirmed', 'stale', 'permissions', 'invalid']) {
     assert.deepEqual(await readFile(path.join(root, 'fixtures', 'cases', `${name}.json`)), await readFile(path.join(fixtureDir, 'cases', `${name}.json`)));
   }
+});
+
+test('the one-day article cases retain their timing and interval basis through the real CLI', async () => {
+  const review = await runPreflight({
+    inputFile: path.join(root, 'fixtures', 'campaigns.one-day.json'),
+    outputDir: path.join(root, 'one-day'),
+  });
+  assert.equal(review.exitCode, 0);
+  assert.deepEqual(review.manifest.summary, { eligible: 3, blocked: 1 });
+  const [confirmed, stale, expired, late] = review.manifest.campaigns;
+  assert.deepEqual(confirmed.review.preferredIds, ['external-replace-and-repair']);
+  assert.equal(confirmed.review.preferred[0].finishMinute, 25);
+  assert.equal(confirmed.review.preferred[0].deadlineSlackMinute, 1415);
+  assert.equal(confirmed.review.timing.handoffDeadlineMinute, 1440);
+  assert.equal(confirmed.review.timing.rehearsalMinutes, 10);
+  assert.equal(confirmed.basis.calendars[0].end, 120);
+  assert.equal(confirmed.basis.confirmations[0].validThrough, 60);
+  assert.deepEqual(stale.review.preferredIds, ['replace-and-repair']);
+  assert.equal(stale.review.preferred[0].finishMinute, 40);
+  assert.equal(expired.status, 'blocked');
+  assert.equal(expired.review.timing.nowMinute, 1380);
+  assert.deepEqual(expired.review.timing.startOptions, [1380]);
+  assert.equal(expired.basis.calendars[0].end, 120);
+  assert.equal(expired.basis.permissions[0].validThrough, 120);
+  assert.equal(expired.basis.confirmations[0].validThrough, 60);
+  assert.ok(expired.review.plans.some(plan => plan.blockers.some(item => item.id === 'resource-calendar')));
+  assert.deepEqual(late.review.preferredIds, ['external-replace-and-repair']);
+  assert.equal(late.review.preferred[0].startMinute, 1380);
+  assert.equal(late.review.preferred[0].finishMinute, 1405);
+  assert.equal(late.review.preferred[0].deadlineSlackMinute, 35);
+  assert.equal(late.basis.calendars[0].end, 1440);
+  assert.equal(late.basis.confirmations[0].validThrough, 1440);
+
+  for (const campaign of review.manifest.campaigns) {
+    const sourcePath = path.join(root, 'fixtures', 'cases', `one-day-${{
+      'GIFT-220': 'confirmed', 'GIFT-221': 'stale', 'GIFT-222': 'expired', 'GIFT-223': 'late',
+    }[campaign.id]}.json`);
+    assert.deepEqual(await load(path.join(review.outputDir, campaign.case)), await load(sourcePath));
+    assert.equal(campaign.review.scenarioCount, 8);
+  }
+  const html = await readFile(path.join(review.outputDir, 'campaigns.html'), 'utf8');
+  for (const text of ['Timing basis', 'T+24 hr', 'Planned rehearsal', '10 min', 'Published rehearsal minimum', 'Candidate starts', 'T+23 hr', 'cutoff slack 35 min', 'Production availability', 'Operating permissions', 'External-booking confirmation']) {
+    assert.ok(html.includes(text), `Report should contain ${text}`);
+  }
+  assert.match(html, /later cutoff does not extend/);
+});
+
+test('a shorter planned rehearsal remains subject to the pinned five-minute minimum', async () => {
+  const inputs = await load(path.join(fixtureDir, 'cases', 'confirmed.json'));
+  inputs.parameters.rehearsalMinutes = 4;
+  await writeFile(path.join(root, 'fixtures', 'cases', 'short-rehearsal.json'), JSON.stringify(inputs));
+  const file = path.join(root, 'fixtures', 'short-rehearsal.json');
+  await writeFile(file, JSON.stringify({ campaigns: [{ id: 'GIFT-120', owner: 'Campaign owner', case: 'cases/short-rehearsal.json' }] }));
+  const review = await runPreflight({ inputFile: file, outputDir: path.join(root, 'short-rehearsal') });
+  assert.equal(review.exitCode, 0);
+  const campaign = review.manifest.campaigns[0];
+  assert.equal(campaign.status, 'blocked');
+  assert.equal(campaign.review.timing.rehearsalMinutes, 4);
+  assert.equal(review.manifest.policy.minimumRehearsalMinutes, 5);
+  assert.ok(campaign.review.plans.every(plan => plan.blockers.some(item => item.id === 'minimum-rehearsal')));
 });
 
 test('a complete blocked case is an ordinary business finding, not a CLI failure', async () => {
@@ -125,11 +193,14 @@ test('existing directories and symlink aliases into source data cannot become ou
 test('the human report escapes source text and retains canonical download links', async () => {
   const manifest = structuredClone(result.manifest);
   manifest.campaigns[0].owner = '<script>alert("x")</script>';
+  manifest.campaigns[0].basis.bookings.push({ id: 'BOOK-PRODUCTION-OTHER-CAMPAIGN', resource: 'production-team', start: 0, end: 10, amount: 1 });
   const html = renderHTML(manifest);
   assert.ok(!html.includes('<script>'));
   assert.match(html, /&lt;script&gt;/);
   assert.match(html, /campaigns\/GIFT-121\/case\.json/);
   assert.match(html, /External replacement and repair/);
   assert.match(html, /Every retained fault scenario|Current campaign|Permission covers this campaign/);
+  assert.match(html, /occupied units 1/);
+  assert.match(html, /BOOK-PRODUCTION-OTHER-CAMPAIGN/);
   assert.ok(!html.includes('"feasible":'));
 });

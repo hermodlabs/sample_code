@@ -6,7 +6,7 @@ cases that need attention and exports native cases for the companion
 [Gift-kit Handoff Desk](../../react-app/gift-kit-handoff-desk/README.md).
 
 This is the batch step. The React example is the next step: open one exported
-case, correct a quote or external-booking record, and calculate a new proposal
+case, update its timing, quote or external-booking record, and calculate a new proposal
 through the SDK. Both examples use the same pinned app package.
 
 ## Run
@@ -73,6 +73,76 @@ Amounts in native cases are integer USD cents. Times are elapsed whole minutes
 from the case's review origin, not dates or clock times. The correction package
 is followed by the declared rehearsal and handoff durations.
 
+## Run the one-day scenario
+
+The original four cases keep their one-hour cutoff and five-minute planned
+rehearsal. A second set provides reproducible inputs for an article using a
+one-day cutoff and ten-minute planned rehearsal:
+
+```sh
+node review-campaigns.mjs \
+  --input fixtures/campaigns.one-day.json \
+  --output .output/one-day-1
+```
+
+This command returns zero: the deliberately blocked case is a complete business
+finding, and all four inputs are valid. The published app, correction-package
+effects, rules and eight retained fault combinations are unchanged.
+
+| Campaign | Recorded situation | Calculated result |
+| --- | --- | --- |
+| GIFT-220 | Early start, current external booking, cutoff at minute 1,440 | External package, $400, finish at minute 25 |
+| GIFT-221 | Same one-day cutoff, older insert scope on the booking | In-house package, $300, finish at minute 40 |
+| GIFT-222 | Review and proposed start at minute 1,380; original short availability, permission and confirmation intervals | No package meets the requirements |
+| GIFT-223 | Review and proposed start at minute 1,380; separately authored records cover minute 1,380 through 1,440 | External package, $400, finish at minute 1,405, with 35 minutes of slack |
+
+Here **one day means 1,440 elapsed minutes from the case origin**, not a working
+day or a calendar date. At minute 1,380, the cutoff is only one hour away.
+Changing the cutoff does not extend production availability, permission or a
+supplier's confirmation. GIFT-220 can finish while the original short records
+still apply; GIFT-222 cannot. GIFT-223 includes explicit fictional replacement
+records with their own sources rather than silently extending GIFT-222's records.
+
+The HTML report distinguishes positions such as `T+24 hr` from durations such as
+`10 min`. It shows the current review time, time remaining, cutoff, finite
+candidate starts, planned rehearsal, published minimum, proposed start and
+finish, and cutoff slack. Expand **Recorded availability, permissions and
+confirmation** to inspect the supplied intervals, scopes and source records.
+The report displays the app's failed conditions; it does not implement another
+availability or permission checker.
+
+These are the timing parameters in each canonical case:
+
+| Parameter | Meaning | Who supplies it |
+| --- | --- | --- |
+| `nowMinute` | Position of this review after the case origin | Case worker |
+| `handoffDeadlineMinute` | Position by which the complete handoff must finish | Case worker |
+| `startOptions` | Explicit finite candidate start positions | Case worker |
+| `rehearsalMinutes` | Planned rehearsal duration after correction | Case worker |
+| `handoffMinutes` | Planned handoff duration after rehearsal | Case worker |
+| Five-minute rehearsal minimum | Published rule applied to every candidate | App author |
+
+The planner compares the supplied start candidates; it does not search every
+minute in the day. Moving `nowMinute` while leaving the only start at zero
+will make that candidate fail the app's not-in-the-past requirement.
+
+A ten-minute **planned** rehearsal already fits this app. A ten-minute
+**mandatory minimum** would require a new authored app rule version. The earlier
+adaptation with a ten-minute minimum is therefore a different rule basis from
+this example's five-minute minimum; an article should state which it demonstrates.
+
+In the Decision Lab repository, both client copies come from the maintained
+source [`examples/gifting/clients`](../../examples/gifting/clients). To edit the
+teaching scenarios and regenerate them, run these commands at the repository root:
+
+```sh
+npm run generate:gifting:clients
+npm run check:gifting:clients
+```
+
+The generated inputs are ordinary standalone files. Running a copied CLI or
+React example does not depend on the generator or on the other example folder.
+
 ## Input and handoff
 
 The manifest is a list of complete canonical case files:
@@ -120,6 +190,12 @@ a genuinely current external booking, then choose **Review packages**. The
 comparison should change from the in-house package to the earlier external
 package. A new booking does not repair old permissions or establish that the
 work was performed.
+
+The same handoff works for `campaigns/GIFT-220/case.json` through
+`campaigns/GIFT-223/case.json` from the one-day run. The desk also lists the
+matching one-day examples. Its **Review setup** form edits the timing parameters;
+the recorded availability and permission tables remain as imported. Use complete
+canonical inputs when a newly obtained source record changes those tables.
 
 Missing or unreadable cases have no exported case. Invalid cases retain their
 validation result but have no fabricated run. Fix a missing budget in the

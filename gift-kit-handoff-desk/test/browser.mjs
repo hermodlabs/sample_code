@@ -61,9 +61,21 @@ async function downloadRun(page) {
 }
 
 const review = page => page.getByRole('button', { name: 'Review packages', exact: true }).click({ timeout: 45000 });
-const selectCase = (page, id) => page.getByRole('button', {
-  name: config.cases.find(entry => entry.id === id).label, exact: true,
-}).click({ timeout: 45000 });
+async function selectCase(page, id) {
+  const entry = config.cases.find(entry => entry.id === id);
+  const picker = page.getByLabel('Scenario set', { exact: true });
+  if (await picker.inputValue() !== entry.scenarioGroup) await picker.selectOption(entry.scenarioGroup);
+  await page.getByRole('button', { name: entry.label, exact: true }).click({ timeout: 45000 });
+}
+
+async function reassessEdited(page, name) {
+  await review(page);
+  const run = await downloadRun(page);
+  const file = path.join(temporary, `${name}.case.json`);
+  await fs.writeFile(file, JSON.stringify(run.input.inputs));
+  assert.deepEqual(outcome(run), outcome(await cliRun(file, name)));
+  return run;
+}
 
 async function parity(page, caseFile, name) {
   await review(page);
@@ -125,7 +137,11 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   page.on('worker', worker => workers.push(worker.url()));
   await page.goto(base);
-  const expected = { confirmed: ['external-replace-and-repair'], stale: ['replace-and-repair'], permissions: [] };
+  const expected = {
+    confirmed: ['external-replace-and-repair'], stale: ['replace-and-repair'], permissions: [],
+    'one-day-confirmed': ['external-replace-and-repair'], 'one-day-stale': ['replace-and-repair'],
+    'one-day-expired': [], 'one-day-late': ['external-replace-and-repair'],
+  };
   for (const [id, preferred] of Object.entries(expected)) {
     await selectCase(page, id);
     const run = await parity(page, path.join(root, `public/data/cases/${id}.json`), id);
@@ -134,6 +150,13 @@ try {
     if (id === 'confirmed') {
       await layout(page, { width: 1440, height: 1000 }, 'browser-desktop.png');
       await layout(page, { width: 390, height: 844 }, 'browser-mobile.png');
+      await page.setViewportSize({ width: 1440, height: 1000 });
+    }
+    if (id === 'one-day-late') {
+      assert.equal(outcome(run).plans.find(plan => plan.preferred).finish, 1405);
+      await page.locator('[aria-label="Assessed timing basis"]').getByText('T+24 hr', { exact: true }).waitFor();
+      await layout(page, { width: 1440, height: 1000 }, 'browser-one-day-desktop.png');
+      await layout(page, { width: 390, height: 844 }, 'browser-one-day-mobile.png');
       await page.setViewportSize({ width: 1440, height: 1000 });
     }
   }
@@ -189,6 +212,64 @@ try {
   await interruptReview(page, { kind: 'case', label: config.cases.find(entry => entry.id === 'permissions').label });
   await parity(page, path.join(root, 'public/data/cases/permissions.json'), 'switched-case');
   checks.push('Cancellation, edits and switching cases prevent an earlier worker result from becoming current');
+
+  const oneDayHandoff = process.env.GIFT_PREFLIGHT_ONE_DAY_CASE || path.join(root, 'public/data/cases/one-day-stale.json');
+  await page.getByLabel('Import case', { exact: true }).setInputFiles(oneDayHandoff);
+  const dayImported = await parity(page, oneDayHandoff, 'one-day-cli-handoff');
+  assert.equal(outcome(dayImported).plans.find(plan => plan.preferred).finish, 40);
+  await page.getByLabel('Planned rehearsal (minutes)', { exact: true }).fill('5');
+  assert.equal(await page.getByRole('button', { name: 'Download SDK run', exact: true }).isDisabled(), true);
+  await page.getByRole('heading', { name: 'Previous calculation', exact: true }).waitFor();
+  const fiveMinutes = await reassessEdited(page, 'five-minute-rehearsal');
+  assert.equal(outcome(fiveMinutes).plans.find(plan => plan.preferred).finish, 35);
+  assert.deepEqual(fiveMinutes.input.inputs.tables.permissions, dayImported.input.inputs.tables.permissions);
+  await page.getByLabel('Planned rehearsal (minutes)', { exact: true }).fill('4');
+  const tooShort = await reassessEdited(page, 'below-published-minimum');
+  assert.equal(outcome(tooShort).plans.filter(plan => plan.preferred).length, 0);
+  assert.ok(outcome(tooShort).plans.every(plan => plan.blockers.some(check => check.constraintId === 'minimum-rehearsal')));
+  checks.push('The actual one-day CLI case imports; five versus ten minutes changes the schedule while four minutes fails the unchanged published rule');
+
+  await selectCase(page, 'one-day-late');
+  await page.getByLabel('Handoff cutoff (minute)', { exact: true }).fill('1400');
+  const missedCutoff = await reassessEdited(page, 'missed-cutoff');
+  assert.equal(outcome(missedCutoff).plans.filter(plan => plan.preferred).length, 0);
+  await page.getByLabel('Handoff cutoff (minute)', { exact: true }).fill('1440');
+  const restoredCutoff = await reassessEdited(page, 'restored-cutoff');
+  assert.equal(outcome(restoredCutoff).plans.find(plan => plan.preferred).finish, 1405);
+  assert.deepEqual(restoredCutoff.input.inputs.tables, missedCutoff.input.inputs.tables);
+  checks.push('Changing the cutoff changes native eligibility and slack without extending any records');
+
+  await selectCase(page, 'one-day-expired');
+  await page.getByLabel('Handoff cutoff (minute)', { exact: true }).fill('2880');
+  const stillExpired = await reassessEdited(page, 'longer-cutoff-expired-records');
+  assert.equal(outcome(stillExpired).plans.filter(plan => plan.preferred).length, 0);
+  assert.equal(stillExpired.input.inputs.tables.calendars[0].end, 120);
+  assert.equal(stillExpired.input.inputs.tables.confirmations[0].validThrough, 60);
+  await page.locator('summary').filter({ hasText: 'Production availability' }).click();
+  await page.getByLabel('Availability 1 ends (minute)', { exact: true }).fill('1440');
+  await page.locator('summary').filter({ hasText: 'Operating permission validity' }).click();
+  for (const record of stillExpired.input.inputs.tables.permissions) {
+    await page.getByLabel(`Permission ${record.id} valid through (minute)`, { exact: true }).fill('1440');
+  }
+  await page.getByText('Recorded time and validity', { exact: true }).click();
+  await page.getByLabel('Valid through (minute)', { exact: true }).fill('1440');
+  const renewed = await reassessEdited(page, 'deliberately-renewed-intervals');
+  assert.equal(outcome(renewed).plans.find(plan => plan.preferred).finish, 1405);
+  for (const [index, record] of renewed.input.inputs.tables.permissions.entries()) {
+    const original = stillExpired.input.inputs.tables.permissions[index];
+    assert.deepEqual({ ...record, validThrough: original.validThrough }, original);
+  }
+  assert.deepEqual(renewed.input.inputs.tables.scenarios, stillExpired.input.inputs.tables.scenarios);
+  checks.push('A longer cutoff does not repair expired records; explicitly edited intervals can restore a plan without changing scope or faults');
+
+  await page.getByLabel('Recorded review time (minute)', { exact: true }).fill('1390');
+  const pastStart = await reassessEdited(page, 'candidate-start-in-past');
+  assert.equal(outcome(pastStart).plans.filter(plan => plan.preferred).length, 0);
+  assert.deepEqual(pastStart.input.inputs.parameters.startOptions, [1380]);
+  await page.getByLabel('Candidate starts (minutes)', { exact: true }).fill('1390');
+  const laterStart = await reassessEdited(page, 'explicit-later-candidate');
+  assert.equal(outcome(laterStart).plans.find(plan => plan.preferred).finish, 1415);
+  checks.push('Changing review time preserves candidate starts; supplying a later candidate explicitly restores a usable start');
 
   assert.ok(workers.length > 0);
   assert.ok(workers.every(url => url.startsWith(base) && new URL(url).pathname.startsWith('/assets/') && !url.includes('/src/')));

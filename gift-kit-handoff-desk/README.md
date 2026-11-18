@@ -7,8 +7,9 @@ requirements and preference rules come from a pinned app configuration.
 
 This is the second step after [Gift-kit Preflight](../../cli-app/gift-kit-preflight/README.md).
 The CLI reviews several batches from exports. This screen lets the coordinator
-open one batch, enter a replacement quote or vendor confirmation, and review
-the updated recommendation. Both use the same app and native case inputs.
+open one batch, update its timing, quote, vendor confirmation or recorded
+availability, and review the updated recommendation. Both use the same app
+and native case inputs.
 
 ## Run
 
@@ -68,6 +69,88 @@ The teaching records are fictional:
 | Confirmed external booking · GIFT-120 | External replacement and repair is preferred: $400, finish at minute 20. |
 | Revised insert, older booking · GIFT-121 | Permission covers insert revision 4, but the external confirmation covers revision 3. In-house replacement and repair is preferred: $300, finish at minute 35. |
 | Revised insert, older permissions · GIFT-122 | The confirmation covers revision 4, but permissions cover revision 3. No listed package passes. |
+
+Use **Scenario set → One-day campaign** for the article's longer review window.
+It uses the same app release, with a cutoff at minute 1,440 and a planned
+ten-minute rehearsal:
+
+| One-day case | Result after **Review packages** |
+| --- | --- |
+| GIFT-220: current confirmation | External package, $400, handoff at T+25 min. |
+| GIFT-221: older insert confirmation | In-house package, $300, handoff at T+40 min. |
+| GIFT-222: late start, expired records | No package passes: the earlier availability, permissions and confirmation do not cover the work. |
+| GIFT-223: late start, current records | External package, $400, handoff at T+23 hr 25 min, 35 min before cutoff. |
+
+The original one-hour cases remain available. The one-day horizon starts at
+the review's fixed origin, not when the screen opens. The late-start cases
+record review time at T+23 hr, leaving one hour before the cutoff. A day means
+1,440 elapsed minutes, not a working day or a timezone-aware calendar date.
+
+## Change the timing without changing the rules
+
+**Review setup** edits these canonical case parameters:
+
+| Form field | Native parameter | Meaning |
+| --- | --- | --- |
+| Recorded review time | `nowMinute` | The earliest time the current review can support work. |
+| Handoff cutoff | `handoffDeadlineMinute` | The position by which the complete handoff must finish. |
+| Planned rehearsal | `rehearsalMinutes` | Proposed rehearsal duration. |
+| Handoff duration | `handoffMinutes` | Proposed time for the final handoff. |
+| Candidate starts | `startOptions` | A comma-separated list of exact start positions to assess. |
+
+All entries use whole minutes. Positions are measured from a fixed review
+origin; durations are lengths of time. Reports display positions as `T+24 hr`
+and durations as `10 min`. The plan table includes start, finish and time before
+the cutoff. Negative time before cutoff means a late finish; positive slack
+alone does not satisfy permissions, capacity or the other requirements.
+
+The published **minimum** rehearsal is read from the pinned app rule and shown
+read-only. It remains five minutes. Planning ten minutes is a case change;
+making ten minutes mandatory is an authoring change and requires another
+reviewed app release. The earlier strict gifting adaptation has a ten-minute
+minimum and is a different policy. This example does not claim to reproduce it.
+
+The planner checks only the supplied candidate starts, not every minute in the
+day. Updating the recorded review time does not move a candidate start at zero.
+Correction, rehearsal and handoff are consecutive activities; this is not an
+overnight calendar scheduler with arbitrary waiting between tasks.
+
+**Availability and permissions** lets the coordinator update the times on
+existing production availability, bookings and permission records. Package,
+actor, source and configuration scopes stay attached to their original records.
+The vendor confirmation has its own recorded time and validity fields. Changing
+a cutoff never extends any of these intervals. Import a complete revised case
+to add or remove records, change permission scope, or change resource capacity.
+
+In GIFT-222, choose **Review packages** to see why the late start fails. Compare
+GIFT-223: its fictional replacement records explicitly cover the later interval.
+They are separately stipulated inputs, not records inferred from the deadline.
+
+Any timing or interval edit marks the result as needing reassessment, disables
+the current run download, and retains the previous calculation for comparison.
+Select **Review packages** to produce a current result; download the case inputs
+to retain those edits.
+
+## Reproduce the article's inputs
+
+The maintained source is
+[`examples/gifting/clients`](../../examples/gifting/clients/README.md). Its
+generator copies canonical cases and descriptions into both standalone clients;
+neither client imports the source folder at runtime. Do not maintain separate
+article-only copies with undocumented differences.
+
+From the Decision Lab checkout:
+
+```sh
+npm run generate:gifting:clients
+npm run check:gifting:clients
+npm run test:gifting:clients
+```
+
+The combined test runs both CLI manifests, imports their actual exported cases
+into the production React app, and compares native results. Fixture generation
+does not change the app package or its pinned rule version. A copied standalone
+project already contains all generated inputs and does not need the generator.
 
 A passing result describes a proposed complete plan. It does not establish
 that corrections, rehearsal or handoff have already happened. Changing a
@@ -142,8 +225,9 @@ and custom review bundles are intentionally outside this tutorial.
 
 The complete imported case includes people, permissions, resources, calendars
 and bookings. A new quote alone does not provide those prerequisites. The form
-updates only package quotes and one external confirmation; it preserves the
-remaining records exactly. It rejects cases containing several current
+updates case timing, package quotes, one external confirmation, and numeric
+fields on existing availability, booking and permission records. It preserves
+the remaining data and all existing permission scopes. It rejects cases containing several current
 confirmations instead of silently choosing one.
 
 Amounts are complete package costs in USD, converted exactly to integer cents.

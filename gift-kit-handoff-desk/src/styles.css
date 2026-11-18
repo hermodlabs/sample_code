@@ -39,6 +39,7 @@ main { max-width: 1328px; padding: 35px 24px 0; margin: auto; }
 .file-actions { flex-shrink: 0; }
 .samples { margin-bottom: 25px; }
 .samples > h2 { font-size: 13px; margin-bottom: 11px; color: #617c87; }
+.scenario-picker { max-width: 280px; margin-bottom: 16px; }
 .sample-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .sample-card { display: flex; flex-direction: column; text-align: left; padding: 15px; gap: 6px; }
 .sample-card span { font-size: 12px; font-weight: 400; color: #70858e; }
@@ -51,12 +52,21 @@ dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0;
 dt { font-size: 11px; color: #748a95; margin-bottom: 3px; }
 dd { margin: 0; font-weight: 600; font-size: 14px; overflow-wrap: anywhere; }
 .desk-layout { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); align-items: start; gap: 22px; }
-.input-column { display: grid; gap: 20px; }
+.input-column { display: grid; gap: 20px; border: 0; padding: 0; margin: 0; min-inline-size: 0; }
 .panel { background: white; border: 1px solid var(--line); border-radius: 8px; padding: 23px; min-width: 0; }
 .panel > h2 + p { color: #748994; font-size: 12px; line-height: 1.7; margin: 10px 0 20px; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px 14px; margin-top: 17px; }
 .field { min-width: 0; }
 .field label { display: block; font-size: 11px; color: #4a6c7c; margin-bottom: 6px; font-weight: 600; }
+.policy-note { color: #476b78; font-size: 12px; background: #f1f7f8; padding: 12px; border-radius: 5px; margin: 17px 0; }
+.interval-record { margin-top: 16px; padding: 14px 0; border-top: 1px solid var(--line); }
+.interval-record > strong { display: block; color: #426979; font-size: 12px; overflow-wrap: anywhere; }
+.interval-record .footnote { margin-top: 6px; overflow-wrap: anywhere; }
+.record-scope { color: #587582; font-size: 11px; overflow-wrap: anywhere; margin-top: 9px; }
+.timing-basis { margin: 20px 0; padding: 16px; background: #f5f8fa; border: 1px solid var(--line); border-radius: 6px; }
+.timing-basis h3 { margin-bottom: 14px; color: #426979; font-size: 12px; }
+.timing-basis dd { font-size: 12px; }
+.timing-basis .all-starts { grid-column: 1 / -1; }
 details { border-top: 1px solid var(--line); padding-top: 15px; margin-top: 19px; }
 summary { cursor: pointer; color: #426979; font-size: 12px; font-weight: 600; }
 details > p { color: #7a8f99; font-size: 11px; margin-top: 12px; }
@@ -81,8 +91,9 @@ button.primary:hover:not(:disabled) { color: white; background: #285365; }
 caption { text-align: left; font-size: 13px; color: #537381; font-weight: 600; margin-bottom: 12px; }
 .comparison th, .comparison td { text-align: left; padding: 14px 9px; border-top: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; font-size: 12px; }
 .comparison thead th { color: #738c97; font-size: 10px; background: #f2f7f9; }
-.comparison th:first-child { width: 50%; }
-.comparison th:nth-child(2) { width: 26%; }
+.comparison th:first-child { width: 40%; }
+.comparison th:nth-child(2) { width: 20%; }
+.comparison th:nth-child(3), .comparison th:nth-child(4) { width: 20%; }
 .plan-name { display: block; margin-bottom: 7px; color: #446879; font-weight: 600; }
 .plan-start { display: block; font-size: 10px; font-weight: 400; color: #83959d; margin-bottom: 7px; }
 .badge { display: inline-block; font-size: 9px; border-radius: 4px; padding: 3px 6px; font-weight: 600; }
@@ -122,9 +133,9 @@ footer { color: #83959d; font-size: 10px; line-height: 1.7; margin-top: 30px; pa
   .results { grid-row: 1; }
   .panel { padding: 20px; }
   .comparison th, .comparison td { padding: 13px 7px; }
-  .comparison th:first-child { width: 48%; }
-  .comparison th:nth-child(2) { width: 28%; }
-  .comparison th:nth-child(3) { width: 24%; }
+  .comparison th:first-child { width: 36%; }
+  .comparison th:nth-child(2), .comparison th:nth-child(3) { width: 21%; }
+  .comparison th:nth-child(4) { width: 22%; }
   .comparison thead th { font-size: 9px; }
   .comparison tbody td { font-size: 11px; }
   footer { flex-direction: column; gap: 6px; }

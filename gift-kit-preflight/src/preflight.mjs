@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { runCLI } from '@decision-lab/cli';
-import { summarizeRun } from './gifting.js';
+import { readTimingPolicy, summarizeRun } from './gifting.js';
 import { renderHTML } from './report.mjs';
 
 const defaultConfig = fileURLToPath(new URL('../data/config.json', import.meta.url));
@@ -68,6 +68,21 @@ function messages(result, validation) {
   }
 }
 
+// These are display receipts from the supplied case, not inferred extensions of
+// availability or authority. Moving a cutoff never edits the source records.
+function reviewBasis(inputs) {
+  const parameters = inputs.parameters ?? {};
+  return {
+    timing: Object.fromEntries([
+      'nowMinute', 'handoffDeadlineMinute', 'rehearsalMinutes', 'handoffMinutes', 'startOptions',
+    ].map(field => [field, structuredClone(parameters[field])])),
+    calendars: structuredClone(inputs.tables?.calendars ?? []),
+    bookings: structuredClone(inputs.tables?.bookings ?? []),
+    permissions: structuredClone(inputs.tables?.permissions ?? []),
+    confirmations: structuredClone(inputs.tables?.confirmations ?? []),
+  };
+}
+
 /**
  * The event team already has complete, reviewed cases. Batch preflight tells
  * the coordinator which cases need attention; a flagged case can then be
@@ -127,6 +142,7 @@ export async function runPreflight({ inputFile, outputDir, configFile = defaultC
     if (app.app?.id !== expected.appId || app.app?.version !== expected.release || app.app?.contentHash !== expected.appHash || app.contentHash !== expected.packageHash) {
       throw fail('The app does not match the configured release and content hashes.');
     }
+    const policy = readTimingPolicy(app);
     for (const campaign of source.campaigns) {
       const row = { id: campaign.id, owner: campaign.owner, status: 'input-error', messages: [], case: null, validation: null, run: null, review: null };
       campaigns.push(row);
@@ -148,6 +164,7 @@ export async function runPreflight({ inputFile, outputDir, configFile = defaultC
       // Copy the complete native case without changing faults, permissions, or
       // evidence scopes. An old confirmation must remain old until replaced by
       // a genuinely new source record; changing a revision is not a repair.
+      row.basis = reviewBasis(inputs);
       row.case = `campaigns/${campaign.id}/case.json`;
       const caseFile = path.join(stage, row.case);
       await writeFile(caseFile, json(inputs));
@@ -198,6 +215,7 @@ export async function runPreflight({ inputFile, outputDir, configFile = defaultC
     const manifest = {
       format: 'gift-kit-preflight/1', createdAt: new Date().toISOString(),
       reviewState: 'calculated-awaiting-review', binding: config.binding,
+      policy,
       sources: [...sources].map(([file, sha256]) => ({ file, sha256 })),
       summary: Object.fromEntries([...new Set(campaigns.map(row => row.status))].map(status => [status, campaigns.filter(row => row.status === status).length])),
       exitCode, campaigns,

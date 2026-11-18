@@ -6,6 +6,12 @@ const scopeFields = [
 ];
 const recordFields = ['id', 'packageId', ...scopeFields, 'source', 'recordedBy'];
 const timeFields = ['recordedAt', 'validFrom', 'validThrough'];
+const setupFields = ['nowMinute', 'handoffDeadlineMinute', 'rehearsalMinutes', 'handoffMinutes'];
+const intervalFields = {
+  calendars: ['start', 'end'],
+  bookings: ['start', 'end', 'amount'],
+  permissions: ['validFrom', 'validThrough'],
+};
 
 export class FormError extends Error {
   constructor(issues) {
@@ -21,9 +27,40 @@ export function formatMoney(value, config) {
   }).format(value / config.moneyDivisor);
 }
 
-// These are elapsed minutes from this case's review origin, not clock times.
+// Durations and positions share canonical minutes, but have different labels.
 export function formatMinutes(value) {
-  return Number.isFinite(value) ? `${value} min` : 'Not established';
+  if (!Number.isFinite(value)) return 'Not established';
+  const magnitude = Math.abs(value);
+  const hours = Math.floor(magnitude / 60);
+  const minutes = magnitude % 60;
+  const duration = hours ? `${hours} hr${minutes ? ` ${minutes} min` : ''}` : `${minutes} min`;
+  return `${value < 0 ? '-' : ''}${duration}`;
+}
+
+// T+ is measured from the case's review origin; it is not a wall-clock date.
+export function formatPosition(value) {
+  return Number.isFinite(value)
+    ? `T${value < 0 ? '-' : '+'}${formatMinutes(Math.abs(value))}`
+    : 'Not established';
+}
+
+/** Read the fixed policy from the pinned public app rather than copying it. */
+export function readTimingPolicy(appPackage) {
+  const constraints = appPackage?.app?.model?.module?.constraints;
+  const constraint = Array.isArray(constraints)
+    ? constraints.find(row => row?.id === 'minimum-rehearsal') : null;
+  const predicate = constraint?.predicate;
+  const args = predicate?.args;
+  if (constraint?.kind !== 'predicate' || predicate?.op !== 'gte'
+    || !Array.isArray(args) || args.length !== 2
+    || args[0]?.ref !== 'parameter.rehearsalMinutes'
+    || Object.keys(args[0]).length !== 1 || Object.keys(args[1] ?? {}).length !== 1
+    || !Number.isSafeInteger(args[1]?.literal) || args[1].literal < 0) {
+    const error = new Error('This app has an incompatible rehearsal policy. The desk requires a published rehearsal-minutes minimum; it cannot infer one.');
+    error.name = 'IncompatibleProfileError';
+    throw error;
+  }
+  return { minimumRehearsalMinutes: args[1].literal };
 }
 
 function required(value) {
@@ -39,6 +76,23 @@ function whole(value) {
     throw new Error('Enter a nonnegative whole number.');
   }
   return Number(value);
+}
+
+function starts(value) {
+  required(value);
+  const values = value.split(',').map(part => whole(part.trim()));
+  if (new Set(values).size !== values.length) {
+    throw new Error('List each candidate start once, in whole minutes separated by commas.');
+  }
+  return values;
+}
+
+function sameValue(left, right) {
+  if (left === right) return true;
+  if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return false;
+  const keys = Object.keys(left);
+  return keys.length === Object.keys(right).length
+    && keys.every(key => Object.hasOwn(right, key) && sameValue(left[key], right[key]));
 }
 
 export function cents(value) {
@@ -83,6 +137,17 @@ export function toDraft(inputs, config) {
     confirmation[field] = record ? String(record[field]) : '';
   }
   return {
+    setup: {
+      ...Object.fromEntries(setupFields.map(field => [field, String(inputs.parameters[field])])),
+      startOptions: inputs.parameters.startOptions.join(', '),
+    },
+    availability: Object.fromEntries(Object.entries(intervalFields).map(([table, fields]) => [
+      table,
+      inputs.tables[table].map(row => ({
+        ...structuredClone(row),
+        ...Object.fromEntries(fields.map(field => [field, String(row[field])])),
+      })),
+    ])),
     quotes: inputs.tables.packages.map(row => ({
       id: row.id,
       quantity: String(row.quantity),
@@ -103,6 +168,33 @@ export function buildCase(base, draft, config) {
   }
 
   const result = structuredClone(base);
+  for (const field of setupFields) {
+    result.parameters[field] = read(`setup.${field}`, draft.setup?.[field], whole);
+  }
+  result.parameters.startOptions = read('setup.startOptions', draft.setup?.startOptions, starts);
+
+  // Editing a deadline is not evidence that existing records were renewed.
+  // Only the explicitly edited numeric cells change; scope and source stay put.
+  for (const [table, fields] of Object.entries(intervalFields)) {
+    const rows = draft.availability?.[table];
+    if (!Array.isArray(rows) || rows.length !== base.tables[table].length) {
+      issues.push({ path: `availability.${table}`, message: 'Keep the existing record rows. Import another case to add or remove records.' });
+      continue;
+    }
+    result.tables[table] = base.tables[table].map((original, index) => {
+      const row = rows[index];
+      const metadata = value => Object.fromEntries(Object.entries(value ?? {}).filter(([key]) => !fields.includes(key)));
+      if (!sameValue(metadata(original), metadata(row))) {
+        issues.push({ path: `availability.${table}.${index}`, message: 'Keep the recorded identity, scope and source unchanged. Import another case to replace these records.' });
+      }
+      return {
+        ...original,
+        ...Object.fromEntries(fields.map(field => [
+          field, read(`availability.${table}.${index}.${field}`, row?.[field], whole),
+        ])),
+      };
+    });
+  }
   const quotes = Array.isArray(draft.quotes) ? draft.quotes : [];
   const ids = base.tables.packages.map(row => row.id);
   if (quotes.length !== ids.length || new Set(quotes.map(row => row.id)).size !== ids.length
@@ -145,19 +237,24 @@ export function buildCase(base, draft, config) {
     }
     result.tables.confirmations = [confirmation];
   }
-  // No other table changes: a new booking is not permission, a repair record,
-  // a reduced fault set, or evidence that production work has been completed.
+  // A new confirmation is not permission, a repair record, a reduced fault set,
+  // or evidence that production work has been completed.
   if (issues.length) throw new FormError(issues);
   return result;
 }
 
 /** Select public SDK findings for this team's table; never re-evaluate rules. */
 export function summarizeRun(run, config) {
+  const parameters = run?.input?.inputs?.parameters;
+  const timing = parameters ? {
+    ...Object.fromEntries(setupFields.map(field => [field, parameters[field]])),
+    startOptions: structuredClone(parameters.startOptions),
+  } : null;
   function unavailable(message) {
     return {
       available: false, status: 'unavailable', issues: [message],
       identity: run?.identity, finding: run?.assessment?.finding,
-      preferredIds: [], preferred: [], plans: [], scenarioCount: 0,
+      preferredIds: [], preferred: [], plans: [], scenarioCount: 0, timing,
     };
   }
   const completeness = run?.report?.completeness;
@@ -168,6 +265,10 @@ export function summarizeRun(run, config) {
   }
   if (Object.entries(config.binding).some(([key, value]) => run.identity?.[key] !== value)) {
     return unavailable('The result belongs to a different app release. Review this case with the pinned app.');
+  }
+  if (!parameters || setupFields.some(field => !Number.isFinite(parameters[field]))
+    || !Array.isArray(parameters.startOptions)) {
+    return unavailable('The result does not retain the complete review timing. Review this case again.');
   }
 
   // This public resolver restores a retained native assessment from its report.
@@ -199,6 +300,7 @@ export function summarizeRun(run, config) {
       id: plan.id, packageId,
       label: config.labels.packages[packageId] ?? packageId,
       startMinute: plan.choices.startMinute, finishMinute: handoff.end,
+      deadlineSlackMinute: parameters.handoffDeadlineMinute - handoff.end,
       expense: plan.expense, expenseDisplay: formatMoney(plan.expense, config),
       feasible: plan.feasible, preferred: preferredPlanIds.includes(plan.id),
       blockers: plan.blockers.map(blocker => ({
@@ -215,5 +317,6 @@ export function summarizeRun(run, config) {
     issues: [], identity: run.identity, finding: assessment.finding,
     preferredIds: preferred.map(plan => plan.packageId), preferred, plans,
     scenarioCount: assessment.coverage.totalScenarios,
+    timing,
   };
 }
