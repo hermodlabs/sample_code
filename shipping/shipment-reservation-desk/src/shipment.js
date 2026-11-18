@@ -197,13 +197,13 @@ export function summarizeRun(run, config) {
   // The public resolver restores the SDK's retained assessment. Consumers do
   // not need to traverse normalized report tables or implement the decoder.
   const assessment = commitment.resolveCommitmentAssessment(run.assessment, run.report);
-  if (assessment.status !== commitment.COMMITMENT_ASSESSMENT_STATUS.COMPLETE || assessment.coverage.complete !== true
-    || assessment.coverage.admissionComplete !== true) {
+  if (!commitment.isAssessmentComplete(assessment)) {
     return unavailable('The calculation has not checked every admitted arrangement and situation.');
   }
+  const hasWitness = commitment.hasFeasibleWitness(assessment);
   const recommendation = assessment.recommendation;
-  if (assessment.feasiblePlanIds.length && (assessment.preference.optimalityEstablished !== true
-    || recommendation?.preferenceEstablished !== true)) {
+  // An unverified positive claim is unavailable, not evidence that every plan is blocked.
+  if (assessment.feasiblePlanIds.length && !commitment.hasEstablishedPreference(assessment)) {
     return unavailable('The calculation has not established a preferred arrangement.');
   }
 
@@ -233,7 +233,7 @@ export function summarizeRun(run, config) {
   const preferred = plans.filter(plan => plan.preferred);
   const parameters = run.input.inputs.parameters;
   return {
-    available: true, status: assessment.feasiblePlanIds.length ? REVIEW_OUTCOME.ELIGIBLE : REVIEW_OUTCOME.BLOCKED, issues: [],
+    available: true, status: hasWitness ? REVIEW_OUTCOME.ELIGIBLE : REVIEW_OUTCOME.BLOCKED, issues: [],
     identity: run.identity,
     scope: { orderId: parameters.orderId, orderRevision: parameters.orderRevision,
       recipient: parameters.recipient, shipDate: parameters.shipDate, profileVersion: parameters.profileVersion },

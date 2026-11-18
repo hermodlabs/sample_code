@@ -228,6 +228,14 @@ example has the same helper and pinned data, so the two displays use the same
 SDK-supported findings. Its form-conversion exports are unused by this batch
 runner; they support the companion interactive step.
 
+The resolved native assessment is inspected with
+`commitment.isAssessmentComplete()`, `commitment.hasFeasibleWitness()` and
+`commitment.hasEstablishedPreference()`. The summary requires an established
+preference whenever the result lists feasible plans and keeps every preferred tie. A
+complete no-package finding is still usable. These read-only helpers inspect
+retained findings; execution, report, release pin and schedule checks remain
+separate.
+
 The helper's `REVIEW_OUTCOME` names the projected business outcomes;
 `PREFLIGHT_STATUS` adds the queue's input-error case. They retain the existing
 manifest strings. An available assessment can be `BLOCKED`, because a complete

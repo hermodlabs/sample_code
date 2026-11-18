@@ -98,6 +98,9 @@ export function projectRun(run, options = {}) {
     assert(inspectReportCompleteness(report).complete, 'The retained report is incomplete or truncated.');
     const dataset = report.datasets?.commitment;
     assert(plain(dataset), 'The run has no commitment report dataset.');
+    // This adapter reads normalized metadata and report tables. Commitment's
+    // native assessment predicates require a resolved payload, so retain the
+    // explicit metadata, coverage and cross-table consistency checks here.
     const assessment = dataset.assessment;
     assert(assessment?.format === 'complete-a-commitment.assessment-normalized/1'
       && assessment.pattern === commitment.COMMITMENT_MODEL_FORMAT && assessment.status === commitment.COMMITMENT_ASSESSMENT_STATUS.COMPLETE,

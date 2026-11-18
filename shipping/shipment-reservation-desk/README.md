@@ -86,6 +86,13 @@ It does not decode report internals or calculate shipment rules. Incomplete
 assessments withhold a recommendation; a complete result with no feasible
 arrangement is a valid business finding.
 
+After resolving the native assessment, the summary uses
+`commitment.isAssessmentComplete()`, `commitment.hasFeasibleWitness()` and
+`commitment.hasEstablishedPreference()` to read its declared findings. An
+established preference is required whenever the result lists feasible plans; every
+preferred tie is retained. These read-only helpers neither run shipment rules
+nor replace execution, report, identity or schedule checks.
+
 [`src/App.jsx`](src/App.jsx) renders the hook's state using ordinary React
 components. `src/main.jsx` mounts the app; `src/styles.css` provides the
 responsive layout and normal page scrolling. Static configuration and complete

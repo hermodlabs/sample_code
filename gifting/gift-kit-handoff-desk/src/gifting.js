@@ -294,13 +294,13 @@ export function summarizeRun(run, config) {
   let assessment;
   try { assessment = commitment.resolveCommitmentAssessment(run.assessment, run.report); }
   catch { return unavailable('The complete package assessment is unavailable in this result.'); }
-  if (assessment.status !== commitment.COMMITMENT_ASSESSMENT_STATUS.COMPLETE || assessment.coverage.complete !== true
-    || assessment.coverage.admissionComplete !== true) {
+  if (!commitment.isAssessmentComplete(assessment)) {
     return unavailable('The calculation has not checked every admitted package and fault scenario.');
   }
+  const hasWitness = commitment.hasFeasibleWitness(assessment);
   const recommendation = assessment.recommendation;
-  if (assessment.feasiblePlanIds.length && (assessment.preference.optimalityEstablished !== true
-    || recommendation?.preferenceEstablished !== true)) {
+  // An unverified positive claim is unavailable, not evidence that every plan is blocked.
+  if (assessment.feasiblePlanIds.length && !commitment.hasEstablishedPreference(assessment)) {
     return unavailable('The calculation has not established a preferred package.');
   }
 
@@ -331,7 +331,7 @@ export function summarizeRun(run, config) {
   const preferred = plans.filter(plan => plan.preferred);
   return {
     available: true,
-    status: assessment.feasiblePlanIds.length ? REVIEW_OUTCOME.ELIGIBLE : REVIEW_OUTCOME.BLOCKED,
+    status: hasWitness ? REVIEW_OUTCOME.ELIGIBLE : REVIEW_OUTCOME.BLOCKED,
     issues: [], identity: run.identity, finding: assessment.finding,
     preferredIds: preferred.map(plan => plan.packageId), preferred, plans,
     scenarioCount: assessment.coverage.totalScenarios,

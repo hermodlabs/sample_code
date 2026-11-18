@@ -203,6 +203,13 @@ The helper reads native findings through the SDK's public
 `commitment.resolveCommitmentAssessment()` function. It does not reproduce the
 model's constraints or implement a second preference rule in JavaScript.
 
+The resolved assessment is inspected with `commitment.isAssessmentComplete()`,
+`commitment.hasFeasibleWitness()` and `commitment.hasEstablishedPreference()`.
+An established preference is required whenever the result lists feasible plans. A
+complete no-package finding remains usable, and all preferred ties survive the
+projection. These read-only helpers do not replace the separate execution,
+report, app pin, timing or schedule checks.
+
 ## CLI to React handoff
 
 1. Run the companion preflight demo and open its batch report.
