@@ -1,14 +1,14 @@
 {
   "format": "shipment-reservation-config/1",
   "title": "Shipment Reservation Desk",
-  "appFileSHA256": "409dc299e6cde8abd54e942517471f6871e66ff7f4f7c7336f9b19ab1436b19e",
+  "appFileSHA256": "03e1357e59893f4c6171db069433fe073724658506ccacb95c49dea2646867ef",
   "binding": {
-    "appId": "shipment-review-with-consolidation",
+    "appId": "shipment-exception-response",
     "release": 1,
-    "appHash": "389fc6f51baf8f14424fe4da2cea612bc6c12f0248126ff5c682cb1d263e191c",
-    "packageHash": "9a10492b24acf94db41a24ea90aee6d371c8de0d4797a6f334ba72e52205070a",
-    "moduleHash": "771c2f10854ac05ac02b44cc4e01e4fb8eccb1cb1b677dab426a850e5ef571f0",
-    "pattern": "complete-a-commitment/1"
+    "appHash": "0cce758147637a6e7d3461a78987ccf7313574a52446aadadc2fecd16902ba1b",
+    "packageHash": "7d9b4d46f3df0743f239016d26e40003560b1f7c07ee96c497e7c02c964df001",
+    "pattern": "complete-a-commitment/1",
+    "moduleHash": "52375c5f2a6131700224039025dbb3b575627cf81456c896104e1f6bf999e06c"
   },
   "currency": "USD",
   "moneyDivisor": 100,
@@ -40,7 +40,10 @@
       "peak-cash-limit": "Cash required stays within the available amount",
       "scoped-verification-purchase-grant": "Any paid verification has the required spending permission",
       "reviewed-arrangement-policy": "The arrangement is covered by this review",
-      "scoped-consolidation-slot": "A current confirmation covers this order and consolidation slot"
+      "scoped-consolidation-slot": "A current confirmation covers this order and consolidation slot",
+      "quote-covers-current-order": "The quote covers this order revision",
+      "quote-known-and-current": "The quote is known and remains valid at selection",
+      "carrier-booking-cutoff": "The carrier booking cutoff has not passed"
     }
   },
   "appUrl": "./shipment-review.app.json",
@@ -48,28 +51,34 @@
   "cases": [
     {
       "id": "confirmed",
-      "label": "Confirmed slot \u00b7 ORD-104",
-      "description": "Current registration, permissions and consolidation confirmation. Consolidated should be preferred.",
+      "label": "Confirmed slot · ORD-104",
+      "description": "Both arrangements meet delivery. Direct is preferred because it costs less.",
       "url": "./cases/confirmed.json"
     },
     {
       "id": "revised",
-      "label": "Revised order \u00b7 ORD-105",
-      "description": "Revision 2 has current registration and permissions, but the slot covers revision 1. Direct should be preferred.",
+      "label": "Revised order · ORD-105",
+      "description": "Direct cannot carry revision 2. Consolidated needs a new scoped slot confirmation.",
       "url": "./cases/revised.json"
     },
     {
       "id": "permissions",
-      "label": "Old permissions \u00b7 ORD-106",
-      "description": "Revision 2 has current registration, but selection and release permissions cover revision 1. No listed arrangement should pass.",
+      "label": "Old permissions · ORD-106",
+      "description": "Current reservation and release permissions are missing. Escalate or obtain actual replacement records.",
       "url": "./cases/permissions.json"
+    },
+    {
+      "id": "urgent",
+      "label": "Booking window closing · ORD-104",
+      "description": "At 11:30 Direct is closed. Consolidated remains supported until noon.",
+      "url": "./cases/urgent.json"
     }
   ],
   "decisionPresentation": {
     "format": "decision-presentation/1",
     "title": "Shipment arrangements",
-    "question": "Which complete arrangement meets the recorded requirements and arrives earliest?",
-    "priorityLabel": "Earliest arrival, then lower complete shipment expense",
+    "question": "Which supported arrangement meets this commitment at the lowest complete expense?",
+    "priorityLabel": "Lowest complete expense, then arrival",
     "moneyFormat": {
       "currency": "USD",
       "divisor": 100
@@ -102,9 +111,61 @@
         }
       },
       {
+        "id": "booking-cutoff",
+        "label": "Book by",
+        "source": {
+          "kind": "derived",
+          "id": "bookingCutoff"
+        },
+        "format": {
+          "kind": "time",
+          "origin": "2026-11-17T00:00:00-06:00",
+          "timeZone": "Etc/GMT+6",
+          "unit": "minute"
+        }
+      },
+      {
         "id": "blockers",
         "label": "Conditions needing attention"
       }
     ]
-  }
+  },
+  "policy": {
+    "priority": "Lowest complete expense, then arrival",
+    "reason": "Protect the accepted delivery promise without paying a premium merely for earliness."
+  },
+  "owner": {
+    "name": "Maya Chen",
+    "role": "shipment-owner",
+    "contact": "maya@example.test"
+  },
+  "operatingActions": [
+    {
+      "id": "obtain-slot",
+      "when": "scoped-consolidation-slot",
+      "owner": "Carrier coordinator",
+      "action": "Obtain a current confirmation for this order, location and loading window.",
+      "closesWith": "A received scoped slot confirmation, then reassessment.",
+      "dueField": "bookingCutoff"
+    },
+    {
+      "id": "obtain-permission",
+      "when": "arrangement-selection-authority",
+      "owner": "Finance reviewer",
+      "action": "Obtain an actual current reservation permission; the expense limit is not authority.",
+      "closesWith": "A current scoped reservation permission, then reassessment.",
+      "dueField": "bookingCutoff"
+    },
+    {
+      "id": "obtain-release",
+      "when": "scoped-final-release-grant",
+      "owner": "Release officer",
+      "action": "Obtain an actual release permission covering preparation for this revision.",
+      "closesWith": "A received current release grant, then reassessment.",
+      "dueField": "bookingCutoff"
+    }
+  ],
+  "workflowFile": "app/shipment.workflow.json",
+  "workflowUrl": "./shipment.workflow.json",
+  "workflowHash": "ff2ca5a32b41b6d7e566f248cabfbcb8ffbc3345b6097dc58e28265e0fa0689e"
 }

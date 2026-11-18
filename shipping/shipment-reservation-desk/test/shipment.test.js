@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { createDecisionLab } from '@decision-lab/sdk';
 import { createNodeExecutor } from '@decision-lab/sdk/node';
-import { buildCase, toDraft, cents, localTime, minuteFromLocal, summarizeRun } from '../src/shipment.js';
+import { buildCase, replaceSupportingRecord, toDraft, cents, localTime, minuteFromLocal, summarizeRun } from '../src/shipment.js';
 import { REVIEW_OUTCOME, REVIEW_STATE, SLOT_CONFIRMATION_STATUS } from '../src/semantics.js';
 
 const data = new URL('../public/data/', import.meta.url);
@@ -81,6 +81,20 @@ test('updating a confirmation does not rewrite other permissions or the source c
   assert.deepEqual(prepared.tables.grants, cases[1].tables.grants);
 });
 
+test('received permissions preserve the document scope instead of copying the current order revision', () => {
+  const base = cases[2], p = base.parameters;
+  const record = { kind: 'reservation', arrangement: 'direct', reference: 'ACTUAL-REPLACEMENT', orderId: p.orderId,
+    orderRevision: '1', recipient: p.recipient, shipDate: p.shipDate, profileVersion: p.profileVersion,
+    shipPoint: 'SP-A', start: localTime(480, config), end: localTime(721, config) };
+  const result = replaceSupportingRecord(base, record, config);
+  assert.equal(result.parameters.orderRevision, '2');
+  assert.equal(result.tables.arrangementAuthorities.find(row => row.arrangement === 'direct').orderRevision, '1');
+  assert.ok(result.provenance.some(row => row.id === record.reference));
+  assert.deepEqual(result.tables.grants, base.tables.grants, 'A reservation record does not issue a release grant.');
+  assert.throws(() => replaceSupportingRecord(base, { ...record, orderId: '' }, config), /Supply a value/);
+  assert.throws(() => replaceSupportingRecord(result, record, config), /already retained/);
+});
+
 // Use the public SDK and an actual Node worker. The screen receives the same
 // native assessment contract from its browser worker, not a test evaluator.
 test('native SDK results support confirmed, revised and blocked shipment reviews', async () => {
@@ -88,7 +102,7 @@ test('native SDK results support confirmed, revised and blocked shipment reviews
   const lab = createDecisionLab({ executor });
   const app = lab.apps.open(appPackage);
   try {
-    const expected = [['consolidated'], ['direct'], []];
+    const expected = [['direct'], [], [], ['consolidated']];
     for (const [index, inputs] of cases.entries()) {
       const bound = lab.cases.create({ app, inputs });
       const run = await lab.run({ app, case: bound, reportOptions: { scope: 'all', locale: 'en-US' } });
@@ -98,8 +112,8 @@ test('native SDK results support confirmed, revised and blocked shipment reviews
       assert.equal(summary.plans.length, 3);
       assert.equal(summary.scope.orderRevision, inputs.parameters.orderRevision);
       if (index === 0) {
-        assert.equal(summary.preferred[0].expense, 500000);
-        assert.equal(summary.preferred[0].arrivalMinutes, 3960);
+        assert.equal(summary.preferred[0].expense, 400000);
+        assert.equal(summary.preferred[0].arrivalMinutes, 5040);
       }
       if (index === 1) {
         const consolidated = summary.plans.find(plan => plan.arrangementId === 'consolidated');

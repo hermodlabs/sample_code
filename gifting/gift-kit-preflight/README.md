@@ -1,22 +1,12 @@
-# Gift-kit preflight
+# Gift-kit intervention queue
 
-A small Node.js application that calls the public `@decision-lab/cli` command
-handler to review several independent gift-kit campaigns. Its output identifies
-cases that need attention and exports native cases for the companion
-[Gift-kit Handoff Desk](../gift-kit-handoff-desk/README.md).
+A Node.js integration for a team preparing QR gift kits. The CLI screens independent campaigns, identifies the next responsible action and exports a **continuing native workflow review** for the [Gift-kit Handoff Desk](../gift-kit-handoff-desk/README.md).
 
-This is the batch step. The React example is the next step: open one exported
-case, update its timing, quote or external-booking record, and calculate a new proposal
-through the SDK. Both examples use the same pinned app package.
+The useful result is an on-time, usable kit handoff, or an explicit escalation. A preferred correction package is one intermediate finding. The script does not order replacements, obtain authority, test checkout or hand over kits.
 
 ## Run
 
-Use Node.js 22.19 or later; Node.js 24 is recommended. This directory is an
-independent npm project. It imports public package exports and has no aliases
-into the Decision Lab source tree.
-
-The current SDK, CLI and React views are local `0.1.0` release candidates. Install matching
-archives before running the copied example:
+Use Node.js 22.19 or later; Node.js 24 is recommended. This is an independent npm project using public package exports. In the Decision Lab checkout, installed workspace packages resolve without publishing. When copying the folder, install matching `@decision-lab/sdk`, `@decision-lab/cli` and `@decision-lab/react-views` releases or the archives produced by `npm run release:pack`.
 
 ```sh
 cd sample_code/gifting/gift-kit-preflight
@@ -24,265 +14,143 @@ npm install --no-save --package-lock=false \
   /absolute/path/to/decision-lab-sdk-0.1.0.tgz \
   /absolute/path/to/decision-lab-cli-0.1.0.tgz \
   /absolute/path/to/decision-lab-react-views-0.1.0.tgz
-npm run demo
-```
 
-In the Decision Lab checkout, `npm run release:pack` creates those archives under
-`artifacts/npm/`. Once compatible packages are published, ordinary `npm install`
-can resolve the dependencies. A checkout with installed workspace dependencies
-can run this example directly.
+# Ordinary screening: no input or finding is silently accepted.
+node review-journeys.mjs \
+  --input fixtures/journey-v3/campaigns.json \
+  --output .output/queue-1
 
-The demo writes `.output/demo/campaigns.html` and checks the four expected
-outcomes. Output directories must be new; use a different location to rerun:
-
-```sh
-node run-demo.mjs --output .output/demo-2
-node review-campaigns.mjs \
-  --input fixtures/campaigns.json \
-  --output .output/preflight-1
+# Explicit fictional demo, including synthetic input and finding reviews.
+npm run demo -- --output .output/demo-1
 npm test
 ```
 
-The ordinary review command returns exit **2** for these fixtures because one
-case intentionally has an invalid budget. The demo returns zero only when all
-four expected outcomes occur, including that input error.
+Output directories must be new. Demo review judgments are restricted to manifests explicitly marked `fictional: true` and the `--accept-fictional-demo` option. That option is a test convenience, never a production approval mechanism. Ordinary execution retains pending questions for a person to review.
 
-## What is being evaluated
+The pinned cost-first policy is a **new version 3 profile**. The older version 2 marketplace releases and one-hour/one-day teaching inputs remain unchanged. `review-campaigns.mjs` and its original fixtures remain compatibility examples; the primary tutorial uses `review-journeys.mjs`.
 
-The kits contain printed QR codes. A complete handoff can fail because the code
-is unreadable, its destination is wrong, or checkout fails. Those faults may
-coexist. The retained cases include all eight combinations; the script does
-not infer a diagnosis or remove a possibility because a quote looks attractive.
+## Why these campaigns need different responses
 
-The pinned app compares five authored packages, from an unchanged-kit rehearsal
-to complete replacement and repair. A package must address the retained faults,
-have current scoped permission and resources, cover the kit quantity, leave
-time for rehearsal and handoff, and meet the budget and cutoff. The external
-package also needs a booking covering the current campaign revisions and work
-interval. The app prefers the earliest feasible complete package.
+All records, people and amounts are fictional. Each campaign has its own independently allocated production resource. Passing separately does not establish that one shared vendor or team can handle them together.
 
-All names, records, prices and timings in the fixtures are fictional:
+The policy first requires a complete package to satisfy the cutoff, quantity, correction coverage, resources, budget, permission and any required booking. Among qualifying packages it prefers lower expense, then earlier handoff. Finishing earlier alone does not justify paying a premium.
 
-| Campaign | Recorded situation | Calculated result |
+| Campaign | Meaningful difference | Reviewed result |
 | --- | --- | --- |
-| GIFT-120 | Current external booking and permissions | External replacement and repair, $400, handoff ready at minute 20 |
-| GIFT-121 | Insert revision 4, current permissions, booking still covers revision 3 | In-house replacement and repair, $300, ready at minute 35 |
-| GIFT-122 | Current booking, permissions still cover revision 3 | No package meets the requirements |
-| GIFT-123 | Campaign budget is `null` | Input error; no recommendation |
+| GIFT-320 | Ample one-day window | In-house complete correction, $300; ready at minute 40 |
+| GIFT-321 | Review starts at minute 1,410; cutoff is 1,440 | External complete correction, $400; ready at 1,435. In-house would finish at 1,450 |
+| GIFT-322 | Same urgent window; external booking missing | No declared complete package fits |
+| GIFT-323 | Booking still names the previous insert revision | No declared complete package fits |
+| GIFT-324 | Actual artwork and checkout reports establish that only printed inserts need correction | Replace inserts, $100; ready at 1,435 |
+| GIFT-325 | Review starts at minute 1,420 | No declared package protects the original cutoff; escalate or revise the promise |
 
-Amounts in native cases are integer USD cents. Times are elapsed whole minutes
-from the case's review origin, not dates or clock times. The correction package
-is followed by the declared rehearsal and handoff durations.
+The native evidence app interprets the actual reports. The application does not remove fault possibilities because a quote looks attractive. The ordinary initial screen conservatively retains all eight declared fault combinations. Its result is visibly **unreviewed**. Accepted scoped evidence can justify a smaller correction in the continuing review.
 
-## Run the one-day scenario
+The recorded ten-minute rehearsal is a planned duration, subject to the five-minute published minimum. It does not establish that the rehearsal happened or passed. All times are elapsed whole minutes from the configured origin, not working hours or calendar-day arithmetic.
 
-The original four cases keep their one-hour cutoff and five-minute planned
-rehearsal. A second set provides reproducible inputs for an article using a
-one-day cutoff and ten-minute planned rehearsal:
+## Inspect the integration
 
-```sh
-node review-campaigns.mjs \
-  --input fixtures/campaigns.one-day.json \
-  --output .output/one-day-1
-```
-
-This command returns zero: the deliberately blocked case is a complete business
-finding, and all four inputs are valid. The published app, correction-package
-effects, rules and eight retained fault combinations are unchanged.
-
-| Campaign | Recorded situation | Calculated result |
-| --- | --- | --- |
-| GIFT-220 | Early start, current external booking, cutoff at minute 1,440 | External package, $400, finish at minute 25 |
-| GIFT-221 | Same one-day cutoff, older insert scope on the booking | In-house package, $300, finish at minute 40 |
-| GIFT-222 | Review and proposed start at minute 1,380; original short availability, permission and confirmation intervals | No package meets the requirements |
-| GIFT-223 | Review and proposed start at minute 1,380; separately authored records cover minute 1,380 through 1,440 | External package, $400, finish at minute 1,405, with 35 minutes of slack |
-
-Here **one day means 1,440 elapsed minutes from the case origin**, not a working
-day or a calendar date. At minute 1,380, the cutoff is only one hour away.
-Changing the cutoff does not extend production availability, permission or a
-supplier's confirmation. GIFT-220 can finish while the original short records
-still apply; GIFT-222 cannot. GIFT-223 includes explicit fictional replacement
-records with their own sources rather than silently extending GIFT-222's records.
-
-The HTML report distinguishes positions such as `T+24 hr` from durations such as
-`10 min`. It shows the current review time, time remaining, cutoff, finite
-candidate starts, planned rehearsal, published minimum, proposed start and
-finish, and cutoff slack. Expand **Recorded availability, permissions and
-confirmation** to inspect the supplied intervals, scopes and source records.
-The report displays the app's failed conditions; it does not implement another
-availability or permission checker.
-
-These are the timing parameters in each canonical case:
-
-| Parameter | Meaning | Who supplies it |
-| --- | --- | --- |
-| `nowMinute` | Position of this review after the case origin | Case worker |
-| `handoffDeadlineMinute` | Position by which the complete handoff must finish | Case worker |
-| `startOptions` | Explicit finite candidate start positions | Case worker |
-| `rehearsalMinutes` | Planned rehearsal duration after correction | Case worker |
-| `handoffMinutes` | Planned handoff duration after rehearsal | Case worker |
-| Five-minute rehearsal minimum | Published rule applied to every candidate | App author |
-
-The planner compares the supplied start candidates; it does not search every
-minute in the day. Moving `nowMinute` while leaving the only start at zero
-will make that candidate fail the app's not-in-the-past requirement.
-
-A ten-minute **planned** rehearsal already fits this app. A ten-minute
-**mandatory minimum** would require a new authored app rule version. The earlier
-adaptation with a ten-minute minimum is therefore a different rule basis from
-this example's five-minute minimum; an article should state which it demonstrates.
-
-In the Decision Lab repository, both client copies come from the maintained
-source [`examples/gifting/clients`](../../../examples/gifting/clients). To edit the
-teaching scenarios and regenerate them, run these commands at the repository root:
-
-```sh
-npm run generate:gifting:clients
-npm run check:gifting:clients
-```
-
-The generated inputs are ordinary standalone files. Running a copied CLI or
-React example does not depend on the generator or on the other example folder.
-
-## Input and handoff
-
-The manifest is a list of complete canonical case files:
-
-```json
-{
-  "campaigns": [
-    {
-      "id": "GIFT-121",
-      "owner": "Jordan Reed",
-      "case": "cases/stale.json"
-    }
-  ]
-}
-```
-
-Paths are relative to the manifest directory. The campaign ID, case `id`, and
-`parameters.batchId` must agree. A case is a complete snapshot: parameters,
-quotes, retained fault scenarios, resources, permissions, and any external-booking
-record. This is not an event log, and the script does not merge partial records.
-It leaves source files unchanged and does not automatically update old scopes.
-The supplied fixtures retain eight fault configurations. An imported case may
-retain a different admitted set; the report shows its actual scenario count,
-and its result applies only to that set.
-
-Each readable, matching case is copied to the output before native validation.
-For example:
-
-```text
-.output/preflight-1/
-  campaigns.html                    Readable campaign comparison
-  manifest.json                     Summary and source SHA-256 receipts
-  commands.json                     Actual CLI arguments, exit codes and diagnostics
-  app.json                          App opened and validated by the CLI
-  campaigns/
-    GIFT-121/
-      case.json                     Native input; import this into the React desk
-      validation.json               Native case-validation result
-      run.json                      Complete native CLI run, including reports
-```
-
-In the React desk, choose **Import case** and select
-`campaigns/GIFT-121/case.json`. The imported booking remains at revision 3. Record
-a genuinely current external booking, then choose **Review packages**. The
-comparison should change from the in-house package to the earlier external
-package. A new booking does not repair old permissions or establish that the
-work was performed.
-
-The same handoff works for `campaigns/GIFT-220/case.json` through
-`campaigns/GIFT-223/case.json` from the one-day run. The desk also lists the
-matching one-day examples. Its **Review setup** form edits the timing parameters;
-the recorded availability and permission tables remain as imported. Use complete
-canonical inputs when a newly obtained source record changes those tables.
-
-Missing or unreadable cases have no exported case. Invalid cases retain their
-validation result but have no fabricated run. Fix a missing budget in the
-canonical source and run preflight again; the React desk's focused form does
-not edit every possible case field.
-
-## Follow the CLI calls
-
-Start with [`src/preflight.mjs`](src/preflight.mjs). The runner calls the public
-handler exported by the installed CLI:
+Start with [`src/journeyPreflight.mjs`](src/journeyPreflight.mjs). The wrapper uses the installed CLI's actual public command handler:
 
 ```js
 import { runCLI } from '@decision-lab/cli';
 
-const exitCode = await runCLI([
-  'run', '--app', appFile, '--case', caseFile,
-  '--reports', 'all', '--output', runFile,
+await runCLI([
+  'workflow', 'evaluate', '--run', currentRunFile, '--step', 'evidence',
+  '--output', nextRunFile,
 ], { stdout, stderr });
 ```
 
-The real application first calls `app open` to validate the pinned package and
-match its app/release hashes, then `case validate` for each case. Valid cases
-reach `run --reports all`. No shell interpolation, private evaluator, workflow
-review acceptance, or second set of JavaScript business rules is involved.
+It first derives conservative screening inputs from the **current business snapshot** through the portable template's public composition mapping, checks that the generated rule module matches the pinned app, and calls `run --reports all` using that pinned app. It never trusts a separately saved same-ID screening fixture: a changed quantity or quote must reach the calculation. It then creates a native workflow run retaining that screen and source receipts. When a person explicitly supplies `--reviewer NAME`, the shared adapter records the input reviews through public SDK workflow operations. Calculation and finding reviews use the CLI. A normal calculation stops at `awaiting-review`; the synthetic demo explicitly accepts its fictional findings to show the complete comparison.
 
-[`src/gifting.js`](src/gifting.js) selects plans and failed conditions with the
-SDK's public `commitment.resolveCommitmentAssessment()` helper. The React
-example has the same helper and pinned data, so the two displays use the same
-SDK-supported findings. Its form-conversion exports are unused by this batch
-runner; they support the companion interactive step.
+[`src/reviewJourney.js`](src/reviewJourney.js) is shared integration code copied into all four shipping/gifting clients. It uses native workflow revisions, answers, evaluations and reviews. It is neither another workflow engine nor another business evaluator. [`src/giftingJourney.js`](src/giftingJourney.js) selects existing findings and formats the gifting-specific next action. The pinned portable definition contains the domain rules and actual-event closure gate.
 
-The resolved native assessment is inspected with
-`commitment.isAssessmentComplete()`, `commitment.hasFeasibleWitness()` and
-`commitment.hasEstablishedPreference()`. The summary requires an established
-preference whenever the result lists feasible plans and keeps every preferred tie. A
-complete no-package finding is still usable. These read-only helpers inspect
-retained findings; execution, report, release pin and schedule checks remain
-separate.
+The queue shows a schedule-only latest useful start from the SDK's retained activity durations. For GIFT-321 the external package needs 25 minutes, so the schedule bound is minute 1,415. This does not promise a vendor response, continued capacity or authority until then. Acquiring support and performing work have their own records.
 
-The helper's `REVIEW_OUTCOME` names the projected business outcomes;
-`PREFLIGHT_STATUS` adds the queue's input-error case. They retain the existing
-manifest strings. An available assessment can be `BLOCKED`, because a complete
-calculation can establish that no package fits. `BOOKING_CONFIRMATION` keeps
-missing and explicitly negative evidence distinct when the case is edited.
+## Continue the same case
 
-[`src/report.mjs`](src/report.mjs) renders a standalone HTML document using
-`RecordsView` from `@decision-lab/react-views` for the campaign queue and package
-comparison tables. React DOM renders them to static HTML; no browser JavaScript
-is required. The main view contains names, outcomes, costs, times, and failed
-conditions. Full native artifacts remain available as downloads rather than the
-primary view. The surrounding task guidance and recorded basis belong to this
-example; the table renderer is shared with the React clients.
-
-The importable entry point is:
-
-```js
-import { runPreflight } from './src/preflight.mjs';
-
-const { manifest, exitCode, outputDir } = await runPreflight({
-  inputFile: 'fixtures/campaigns.json',
-  outputDir: '.output/review-2',
-  // configFile: 'data/config.json',
-  // timeoutMs: 30000,
-  // maxPlans: 0, // Useful for exercising a native incomplete assessment.
-});
+```text
+.output/queue-1/
+  campaigns.html
+  manifest.json
+  commands.json
+  GIFT-321/
+    screening.case.json
+    screening.run.json
+    review.workflow.json       Import this into the React desk
+    output.json
+    planning.run.json          Present after planning has been evaluated
 ```
 
-## Failure and execution boundaries
+The workflow file retains its exact definition and app pins, original commitment, sources, provisional screening, reviewed answers, native evaluations and review history. Importing it into React preserves those records; it does not automatically accept them.
 
-| Exit | Meaning |
-| --- | --- |
-| 0 | Every case was assessed; a complete result with no feasible package is valid |
-| 2 | Invalid manifest or case inputs; per-campaign input failures are isolated |
-| 3 | An assessment was incomplete or unavailable; no current recommendation |
-| 4 | Operational failure, such as inability to write artifacts |
+You can also continue headlessly:
 
-When several outcomes coexist, operational failure takes priority, then
-unavailable assessment, then invalid input. Duplicate IDs, unsafe case paths,
-and existing or overlapping output locations fail before publication. Fresh
-output is published as a directory only after the batch finishes; native
-search limits and timeouts remain visible rather than producing partial
-recommendations.
+```sh
+# Explicitly review the imported answers and calculate evidence.
+node continue-review.mjs \
+  --review .output/queue-1/GIFT-321/review.workflow.json \
+  --review-inputs --actor 'Campaign reviewer' \
+  --output .output/evidence-1
 
-The app configuration and complete case determine the calculation. A slot
-confirmation is neither authority to act nor completion evidence. Independent
-campaigns may reuse the same resource names; passing separately does not prove
-that a shared production team, vendor, or budget can serve all campaigns at
-once. Neither example books work, obtains external approval, or claims that
-production and handoff occurred.
+# After inspecting the evidence, accept that finding and calculate planning.
+node continue-review.mjs \
+  --review .output/evidence-1/review.workflow.json \
+  --accept-finding evidence --actor 'Campaign reviewer' \
+  --output .output/planning-1
+
+# After inspecting planning, accept it separately.
+node continue-review.mjs \
+  --review .output/planning-1/review.workflow.json \
+  --accept-finding planning --actor 'Campaign reviewer' \
+  --output .output/reviewed-1
+```
+
+Use the exact plan ID in `output.json` with `--choose PLAN_ID --actor NAME` to record the operating selection. That is distinct from accepting the analytical finding. Actual operating assertions use `--kind authorization|correction|rehearsal|handoff|escalation --record ORIGINAL_RECORD.json --recorded-at ISO_TIMESTAMP`. The JSON contains the original reference, source and domain fields; recording it neither authenticates the document nor performs the event.
+
+The generic CLI remains available for direct `workflow answer`, `workflow review`, `workflow inspect` and `workflow brief` operations. The sample convenience script calculates the next executable step and stops for its finding review.
+
+## Time and reassessment
+
+```sh
+node continue-review.mjs \
+  --review .output/reviewed-1/review.workflow.json \
+  --as-of 2026-11-18T23:36:00.000Z \
+  --review-inputs --actor 'Campaign reviewer' \
+  --output .output/time-advanced-1
+```
+
+This explicitly moves the pre-action review time to minute 1,416. It does not extend resource availability, permissions or a booking. Dependent findings become stale and must be recalculated and reviewed. At that time the 25-minute external package would miss minute 1,440.
+
+Once work is underway, preserve the historical decision basis and record actual event/recording times separately. Advancing the planning clock is a new decision revision, rather than a method for recording completed production.
+
+When two compatible planning runs exist, the continuation writes `changes.json` using `lab.reports.compareFindings({ before, after })`. SDK comparison preserves rule/case identity, completeness and ties. It can report unavailable; it never fabricates a recommendation change from an incomplete assessment.
+
+## What closes the original commitment
+
+The authored workflow gate requires all of these, tied to the current chosen planning run:
+
+1. A recorded operating selection after the current planning finding was accepted.
+2. A separate sourced spending authorization covering the recorded amount and original work scope.
+3. Actual correction completion for that selected package, quantity and input scope, naming the corrected output revisions.
+4. A successful fresh rehearsal covering that corrected configuration, linked to the correction record and allowing the declared duration.
+5. A complete quantity-specific handoff linked to that rehearsal, with valid chronology and completion no later than the **original** cutoff.
+
+The gate checks event times against their separately recorded times. An old-scope test, short rehearsal, future observation, missing authority or late handoff cannot close it. Extending the proposed cutoff or retargeting the campaign, device or intended account does not rewrite the original promise.
+
+For each selected plan, the latest supplied complete record of each operating kind is authoritative. Later negative or wrong-scope records supersede older positives. A replacement correction requires current linked rehearsal and handoff records. Earlier assertions remain in history. This bounded contract does not aggregate partial deliveries or several parallel work records.
+
+The application does not infer probabilities, compare sequential study policies, construct unlisted recovery packages or allocate resources across campaigns. Those would need explicitly authored models or additional capabilities.
+
+## Maintain the authored inputs
+
+Maintained source is [`examples/gifting/clients`](../../../examples/gifting/clients). The new `journey-v3/template.json`, author configuration and native workflow are portable. The author script only creates a new fictional immutable release; ordinary clients run the generated JSON without importing author code.
+
+```sh
+# At repository root:
+node examples/gifting/clients/journey-v3/author.mjs --check
+npm run generate:gifting:clients
+npm run check:gifting:clients
+```
+
+No production article or external system is required to understand or run this example.

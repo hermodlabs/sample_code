@@ -1573,3 +1573,9 @@ fieldset {
   color: #8d9fa9;
   margin-top: 7px;
 }
+
+/* Keep the operating choice next to its finding, with optional source entry
+   behind a disclosure. Both columns continue to use ordinary page scrolling. */
+.review-column { display: grid; gap: 24px; min-width: 0; align-content: start; }
+.supporting-record-toggle { padding: 24px; cursor: pointer; font-weight: 650; color: #284c61; }
+@media (max-width: 850px) { .review-column { order: -1; } }

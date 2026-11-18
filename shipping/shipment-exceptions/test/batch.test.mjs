@@ -27,17 +27,17 @@ async function withDirectory(operation) {
 test('reassesses revised orders, preserves old scopes, and retains complete native reports', async () => withDirectory(async root => {
   const baseline = await runBatch(options(root, 'baseline'));
   assert.equal(baseline.exitCode, 0);
-  assert.deepEqual(baseline.manifest.rows.map(row => row.current.preferredIds), Array(4).fill(['consolidated']));
+  assert.deepEqual(baseline.manifest.rows.map(row => row.current.preferredIds), Array(4).fill(['direct']));
   const baselineBytes = await readFile(path.join(root, 'baseline/manifest.json'));
   const morning = await runBatch(options(root, 'morning', { previousFile: path.join(root, 'baseline/manifest.json') }));
   assert.equal(morning.exitCode, 2, 'one malformed quote must be visible to an automated caller');
-  assert.deepEqual(morning.manifest.rows.map(row => row.status), ['unchanged', 'recommendation-changed', 'blocked', 'input-error']);
+  assert.deepEqual(morning.manifest.rows.map(row => row.status), ['unchanged', 'blocked', 'blocked', 'input-error']);
   const [unchanged, revised, blocked, invalid] = morning.manifest.rows;
-  assert.deepEqual(unchanged.current.preferredIds, ['consolidated']);
-  assert.deepEqual(revised.before.preferredIds, ['consolidated']);
-  assert.deepEqual(revised.current.preferredIds, ['direct']);
-  assert.equal(revised.current.preferred[0].expense, 400000);
-  assert.equal(revised.current.preferred[0].arrivalMinutes, 5040);
+  assert.equal(unchanged.actionWindows.find(row => row.arrangement === 'direct').dueMinute, 660);
+  assert.equal(unchanged.actionWindows.find(row => row.arrangement === 'direct').remainingMinutes, 180);
+  assert.deepEqual(unchanged.current.preferredIds, ['direct']);
+  assert.deepEqual(revised.before.preferredIds, ['direct']);
+  assert.deepEqual(revised.current.preferredIds, []);
   assert.ok(revised.current.plans.find(plan => plan.arrangementId === 'consolidated').blockers.some(check => check.id === 'scoped-consolidation-slot'));
   assert.equal(blocked.current.available, true);
   assert.equal(blocked.current.finding, 'no_feasible_plan');
@@ -61,7 +61,7 @@ test('reassesses revised orders, preserves old scopes, and retains complete nati
   assert.ok(transcript.commands.filter(command => command.args[0] === 'run').every(command => command.exitCode === 0), 'blocked is a successful native assessment');
   assert.ok(transcript.commands.every(command => !command.args.includes('--force')));
   const html = await readFile(path.join(root, 'morning/shipments.html'), 'utf8');
-  assert.match(html, /Recommendation changed/);
+  assert.match(html, /No arrangement passes/);
   assert.match(html, /No arrangement passes/);
   assert.match(html, /Selection authority covers this order/);
   assert.match(html, /shipments\/SHIP-105\/run.json/);
@@ -128,7 +128,7 @@ test('accepts filename-safe dots and rejects malformed arguments before creating
   const result = await runBatch({ inputDir, retainedDir, outputDir: path.join(root, 'review'), createdAt });
   assert.equal(result.exitCode, 0);
   assert.equal(result.manifest.rows[0].shipmentId, 'SHIP.104');
-  assert.deepEqual(result.manifest.rows[0].current.preferredIds, ['consolidated']);
+  assert.deepEqual(result.manifest.rows[0].current.preferredIds, ['direct']);
   const command = spawnSync(process.execPath, [path.join(directory, 'review-shipments.mjs'), '--max-plans', '-1'], { encoding: 'utf8' });
   assert.equal(command.status, 2);
   assert.match(command.stderr, /whole number/);

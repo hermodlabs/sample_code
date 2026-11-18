@@ -29,12 +29,12 @@ try {
   const morning = await runBatch({ inputDir: path.join(directory, 'fixtures/morning'),
     retainedDir: path.join(directory, 'fixtures/retained/morning'), outputDir: path.join(output, 'morning'),
     previousFile: path.join(output, 'baseline/manifest.json'), createdAt: '2026-11-17T14:05:00Z' });
-  const expected = [BATCH_STATUS.UNCHANGED, BATCH_STATUS.RECOMMENDATION_CHANGED, BATCH_STATUS.BLOCKED, BATCH_STATUS.INPUT_ERROR];
+  const expected = [BATCH_STATUS.UNCHANGED, BATCH_STATUS.BLOCKED, BATCH_STATUS.BLOCKED, BATCH_STATUS.INPUT_ERROR];
   if (morning.manifest.rows.length !== expected.length || morning.manifest.rows.some((row, index) => row.status !== expected[index])) {
     throw new BatchError('The demo did not produce its documented outcomes. Inspect the retained reports.');
   }
   process.stdout.write(`Baseline: ${path.join(output, 'baseline/shipments.html')}\nMorning: ${path.join(output, 'morning/shipments.html')}\n`);
-  process.stdout.write('Verified: unchanged Consolidated; switch to Direct; blocked revised order; rejected EUR quote.\n');
+  process.stdout.write('Verified: cost-first Direct; scoped slot/capacity exception; missing current authority; rejected EUR quote.\n');
   // The demo harness passes when the intended error is demonstrated. The batch
   // command itself returns 2 for this morning input; never mask it in production.
 } catch (error) {

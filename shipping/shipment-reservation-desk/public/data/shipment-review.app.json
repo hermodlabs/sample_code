@@ -327,12 +327,12 @@
     "schemaVersion": 5,
     "kind": "hermod-published-app",
     "runtime": "diagnostic-evidence",
-    "id": "shipment-review-with-consolidation",
+    "id": "shipment-exception-response",
     "version": 1,
-    "name": "Shipment review with consolidation",
-    "description": "Compare Direct, Backup and Consolidated freight for the same order. Preserve the existing mandatory shipment checks; Consolidated additionally needs a current, scoped slot confirmation known by selection time and valid for its full 60-minute loading window before departure. Rank eligible arrangements by arrival, then complete expense.",
-    "source": "# Canonical Decision Lab data. Rules are data, never executable code.\nformat: complete-a-commitment/1\nmodule:\n  id: shipment-arrangement-with-consolidation\n  title: Shipment review with consolidation\n  description: \"Compare Direct, Backup and Consolidated freight for the same order. Preserve the existing mandatory shipment checks; Consolidated additionally needs a current, scoped slot confirmation known by selection time and valid for its full 60-minute loading window before departure. Rank eligible arrangements by arrival, then complete expense.\"\n  preference:\n    direction: min\n    expression:\n      ref: derived.arrival\n    then:\n      - direction: min\n        expression:\n          ref: finance.expense\n  version: \"1.0.0\"\n  metadata:\n    catalog:\n      domain:\n        id: order-fulfillment\n        label: Order fulfillment\n        description: \"Review delivery commitments, operating prerequisites and shipment arrangements.\"\n      useCase:\n        id: review-first-shipment\n        label: Review a first shipment\n        description: Review one shipment before committing money to an arrangement.\n  question: \"Which complete arrangement can meet this shipment commitment under every remaining transportation state?\"\n  template:\n    id: complete-a-commitment\n    version: 1\n  units:\n    time: minute\n    timeOrigin: \"Minute 0 is 2026-11-17T00:00:00-06:00; fixed UTC-06:00 for this bounded shipment horizon.\"\n    money: USD cent\n    count: unit of resource capacity\n    quantity: case\n  assumptions: [\"This fictional case contains one accepted order revision for 100 cases, complete mutually exclusive arrangements and a fixed receipt commitment. Direct, Backup and Consolidated are the only reviewed arrangement identities; an unfamiliar option must receive an authored policy before it can pass.\", The listed operating states are a reviewed projection of the evidence result. No probabilities are inferred from evidence or used to remove a mandatory scenario., Direct transportation requires registered SP-A. The backup uses independently registered SP-B in either state. Portal presence does not establish transportation registration., \"Each arrangement includes all packing, release and freight expense in its quoted fee. Preparation and resource use are explicitly checked and add no separate charge.\", \"The accepted 100 cases are stipulated to be available to either complete arrangement; this profile does not perform inventory allocation, manufacturing or replenishment.\", \"The complete issued-grant registry, calendar, bookings and quoted capacities remain stable. Computing a proposal does not purchase verification, reserve freight, grant permission or release stock.\", \"All tasks use half-open intervals. Packing starts when the arrangement can be selected; final release follows packing and must finish before the fixed offered departure.\", \"Reservation must be possible by minute 720, independently of receipt by minute 5340. Equal-time completion at either inclusive deadline is allowed.\", \"studyFee is one prospective or incurred verification fee counted once. The payment time is studyFeeAt, and the complete quoted arrangement fee is paid when that arrangement can be selected. There are no deposits, refunds, revenue or additional financing.\", A complete static arrangement is assessed against every retained state. Learning may later choose among these complete arrangements only through separately checked report branches., A nonzero verification fee needs an independently recorded scoped purchase grant and study-purchase cap at its payment time. Missing authority cannot be replaced by available budget or positive expected benefit., \"Both SP-A and SP-B are stipulated transportation-registered for the exact shipment scope. Consolidated uses the already registered SP-B; this example does not establish a new ship point registration.\", \"slotConfirmations is a complete current-status register, not a history of events. Its arrangement key permits at most one resolved current record per arrangement. The logistics coordinator must reconcile conflicting messages to status conflicting, and replace a cancelled confirmation with status cancelled; duplicate current rows are invalid inputs. The model does not authenticate supplier messages or reconcile an event stream.\", \"Consolidated needs status confirmed for this arrangement, ship point, order revision, recipient, ship date and profile. Confirmation must exist and be known at selection time, be confirmed by the reservation cutoff, and cover the full half-open 60-minute loading window immediately before carrier departure. Missing, cancelled, conflicting, late or incorrectly scoped confirmation does not establish the requirement. This checks the recorded slot; it does not schedule loading work or resolve physical dock capacity conflicts.\", \"Direct and Backup retain their original operating policies. The slot condition applies only to the authored Consolidated identity, while the separate reviewed-arrangement policy rejects unknown identities. No case checkbox can disable this prerequisite.\"]\n  inputs:\n    parameters:\n      orderId:\n        type: string\n      orderRevision:\n        type: string\n      recipient:\n        type: string\n      shipDate:\n        type: string\n      profileVersion:\n        type: string\n      currentTime:\n        type: integer\n        unit: time\n        minimum: 0\n      actionReady:\n        type: integer\n        unit: time\n        minimum: 0\n      reservationDeadline:\n        type: integer\n        unit: time\n        minimum: 0\n      receiptDeadline:\n        type: integer\n        unit: time\n        minimum: 0\n      receiptOpen:\n        type: integer\n        unit: time\n        minimum: 0\n      receiptClose:\n        type: integer\n        unit: time\n        minimum: 0\n      expenseLimit:\n        type: integer\n        unit: money\n        minimum: 0\n      cashLimit:\n        type: integer\n        unit: money\n        minimum: 0\n      studyFee:\n        type: integer\n        unit: money\n        minimum: 0\n      studyFeeAt:\n        type: integer\n        unit: time\n        minimum: 0\n      quantity:\n        type: integer\n        unit: quantity\n        minimum: 1\n      packDuration:\n        type: integer\n        unit: time\n        minimum: 1\n      releaseDuration:\n        type: integer\n        unit: time\n        minimum: 1\n      packActor:\n        type: string\n        references:\n          table: actors\n          column: id\n      releaseActor:\n        type: string\n        references:\n          table: actors\n          column: id\n      studyPurchaseCap:\n        type: integer\n        unit: money\n        minimum: 0\n      studyPurchaser:\n        type: string\n    tables:\n      arrangements:\n        key: [id]\n        columns:\n          id:\n            type: string\n          shipPoint:\n            type: string\n          fee:\n            type: integer\n            unit: money\n            minimum: 0\n          departure:\n            type: integer\n            unit: time\n            minimum: 0\n          travelDuration:\n            type: integer\n            unit: time\n            minimum: 0\n          capacity:\n            type: integer\n            unit: quantity\n            minimum: 0\n      states:\n        key: [id]\n        columns:\n          id:\n            type: string\n          registered:\n            type: boolean\n      readiness:\n        key: [stateId, shipPoint]\n        columns:\n          stateId:\n            type: string\n            references:\n              table: states\n              column: id\n          shipPoint:\n            type: string\n          registered:\n            type: boolean\n          orderId:\n            type: string\n          orderRevision:\n            type: string\n          recipient:\n            type: string\n          shipDate:\n            type: string\n          profileVersion:\n            type: string\n      scenarios:\n        key: [id]\n        columns:\n          id:\n            type: string\n          stateId:\n            type: string\n            references:\n              table: states\n              column: id\n      actors:\n        key: [id]\n        columns:\n          id:\n            type: string\n      capabilities:\n        key: [actor, action]\n        columns:\n          actor:\n            type: string\n            references:\n              table: actors\n              column: id\n          action:\n            type: string\n      calendars:\n        key: [actor, start, end]\n        columns:\n          actor:\n            type: string\n            references:\n              table: actors\n              column: id\n          start:\n            type: integer\n            unit: time\n            minimum: 0\n          end:\n            type: integer\n            unit: time\n            minimum: 0\n      resources:\n        key: [id]\n        columns:\n          id:\n            type: string\n          capacity:\n            type: integer\n            unit: count\n            minimum: 0\n      bookings:\n        key: [id]\n        columns:\n          id:\n            type: string\n          resource:\n            type: string\n            references:\n              table: resources\n              column: id\n          start:\n            type: integer\n            unit: time\n            minimum: 0\n          end:\n            type: integer\n            unit: time\n            minimum: 0\n          amount:\n            type: integer\n            unit: count\n            minimum: 0\n      grants:\n        key: [id]\n        columns:\n          id:\n            type: string\n          actor:\n            type: string\n            references:\n              table: actors\n              column: id\n          action:\n            type: string\n          arrangement:\n            type: string\n            references:\n              table: arrangements\n              column: id\n          shipPoint:\n            type: string\n          orderId:\n            type: string\n          orderRevision:\n            type: string\n          recipient:\n            type: string\n          shipDate:\n            type: string\n          profileVersion:\n            type: string\n          start:\n            type: integer\n            unit: time\n            minimum: 0\n          end:\n            type: integer\n            unit: time\n            minimum: 0\n      arrangementAuthorities:\n        key: [arrangement]\n        columns:\n          arrangement:\n            type: string\n            references:\n              table: arrangements\n              column: id\n          orderId:\n            type: string\n          orderRevision:\n            type: string\n          recipient:\n            type: string\n          shipDate:\n            type: string\n          profileVersion:\n            type: string\n          start:\n            type: integer\n            unit: time\n            minimum: 0\n          end:\n            type: integer\n            unit: time\n            minimum: 0\n      studyPurchaseGrants:\n        key: [id]\n        columns:\n          id:\n            type: string\n          actor:\n            type: string\n          action:\n            type: string\n          orderId:\n            type: string\n          orderRevision:\n            type: string\n          recipient:\n            type: string\n          shipDate:\n            type: string\n          profileVersion:\n            type: string\n          start:\n            type: integer\n            unit: time\n            minimum: 0\n          end:\n            type: integer\n            unit: time\n            minimum: 0\n          ceiling:\n            type: integer\n            unit: money\n            minimum: 0\n      slotConfirmations:\n        key: [arrangement]\n        columns:\n          arrangement:\n            type: string\n            references:\n              table: arrangements\n              column: id\n          shipPoint:\n            type: string\n          orderId:\n            type: string\n          orderRevision:\n            type: string\n          recipient:\n            type: string\n          shipDate:\n            type: string\n          profileVersion:\n            type: string\n          slotReference:\n            type: string\n          status:\n            type: string\n          confirmedAt:\n            type: integer\n            unit: time\n            minimum: 0\n          knownAt:\n            type: integer\n            unit: time\n            minimum: 0\n          validFrom:\n            type: integer\n            unit: time\n            minimum: 0\n          validUntil:\n            type: integer\n            unit: time\n            minimum: 0\n  choices:\n    - id: arrangement\n      domain:\n        table: arrangements\n        column: id\n  scenarioDomain:\n    table: scenarios\n  lookupCoverage:\n    - table: readiness\n      keys:\n        stateId:\n          domain:\n            table: scenarios\n            column: stateId\n        shipPoint:\n          domain:\n            table: arrangements\n            column: shipPoint\n  derived:\n    - id: shipPoint\n      type: string\n      expr:\n        op: lookup\n        table: arrangements\n        where:\n          id:\n            ref: choice.arrangement\n        column: shipPoint\n    - id: departure\n      type: integer\n      unit: time\n      expr:\n        op: lookup\n        table: arrangements\n        where:\n          id:\n            ref: choice.arrangement\n        column: departure\n    - id: travelDuration\n      type: integer\n      unit: time\n      expr:\n        op: lookup\n        table: arrangements\n        where:\n          id:\n            ref: choice.arrangement\n        column: travelDuration\n    - id: arrival\n      type: integer\n      unit: time\n      expr:\n        op: add\n        args:\n          - ref: derived.departure\n          - ref: derived.travelDuration\n    - id: slotStart\n      type: integer\n      unit: time\n      expr:\n        op: sub\n        args:\n          - ref: derived.departure\n          - literal: 60\n  activities:\n    - id: pack\n      actor:\n        ref: parameter.packActor\n      start:\n        ref: parameter.actionReady\n      duration:\n        ref: parameter.packDuration\n      resources:\n        - resource:\n            ref: parameter.packActor\n          amount:\n            literal: 1\n        - resource:\n            literal: packing-bench\n          amount:\n            literal: 1\n    - id: release\n      actor:\n        ref: parameter.releaseActor\n      start:\n        ref: activity.pack.end\n      duration:\n        ref: parameter.releaseDuration\n      resources:\n        - resource:\n            ref: parameter.releaseActor\n          amount:\n            literal: 1\n  resources:\n    definitions:\n      table: resources\n      idColumn: id\n      capacityColumn: capacity\n    bookings:\n      table: bookings\n      resourceColumn: resource\n      startColumn: start\n      endColumn: end\n      amountColumn: amount\n  requirements:\n    - id: SUFFICIENCY\n      label: Complete accepted order\n      meaning: The arrangement carries the accepted quantity using a transportation-registered ship point for this exact shipment scope.\n      waivable: false\n    - id: RESOURCES\n      label: Preparation staff and workspace\n      meaning: \"Packing and release have the necessary capabilities, calendars and shared capacity for their complete durations.\"\n      waivable: false\n    - id: AUTHORITY\n      label: \"Purchase, arrangement and final release permission\"\n      meaning: \"Recorded authorities cover verification purchase, arrangement selection and final release for the same order revision, recipient, shipment date and profile. A budget ceiling does not create permission.\"\n      waivable: false\n    - id: TIME\n      label: \"Reservation, preparation and receipt\"\n      meaning: \"Select by the reservation cutoff, finish preparation before departure and meet the receipt deadline.\"\n      waivable: false\n    - id: ACCESS\n      label: Receiving window\n      meaning: Arrival falls within the declared half-open receiving window.\n      waivable: false\n    - id: COST\n      label: Total expense and cash\n      meaning: The quoted arrangement fee plus the single prospective or incurred verification fee stay within expense and peak-cash limits.\n      waivable: false\n    - id: SLOT\n      label: Confirmed consolidation slot\n      meaning: \"Consolidated freight needs a resolved current supplier slot confirmation for this exact shipment, known at selection and covering the full 60-minute loading window immediately before departure.\"\n      waivable: false\n  constraints:\n    - id: capacity-for-complete-order\n      requirement: SUFFICIENCY\n      kind: predicate\n      predicate:\n        op: gte\n        args:\n          - op: lookup\n            table: arrangements\n            where:\n              id:\n                ref: choice.arrangement\n            column: capacity\n          - ref: parameter.quantity\n    - id: scoped-transportation-registration\n      requirement: SUFFICIENCY\n      kind: predicate\n      predicate:\n        op: exists\n        table: readiness\n        where:\n          stateId:\n            ref: scenario.stateId\n          shipPoint:\n            ref: derived.shipPoint\n          registered:\n            literal: true\n          orderId:\n            ref: parameter.orderId\n          orderRevision:\n            ref: parameter.orderRevision\n          recipient:\n            ref: parameter.recipient\n          shipDate:\n            ref: parameter.shipDate\n          profileVersion:\n            ref: parameter.profileVersion\n    - id: pack-capability\n      requirement: RESOURCES\n      kind: predicate\n      predicate:\n        op: exists\n        table: capabilities\n        where:\n          actor:\n            ref: activity.pack.actor\n          action:\n            literal: pack\n    - id: pack-availability\n      requirement: RESOURCES\n      kind: predicate\n      predicate:\n        op: interval-covered\n        table: calendars\n        where:\n          actor:\n            ref: activity.pack.actor\n        start:\n          ref: activity.pack.start\n        end:\n          ref: activity.pack.end\n        startColumn: start\n        endColumn: end\n    - id: release-capability\n      requirement: RESOURCES\n      kind: predicate\n      predicate:\n        op: exists\n        table: capabilities\n        where:\n          actor:\n            ref: activity.release.actor\n          action:\n            literal: release\n    - id: release-availability\n      requirement: RESOURCES\n      kind: predicate\n      predicate:\n        op: interval-covered\n        table: calendars\n        where:\n          actor:\n            ref: activity.release.actor\n        start:\n          ref: activity.release.start\n        end:\n          ref: activity.release.end\n        startColumn: start\n        endColumn: end\n    - id: combined-resource-capacity\n      requirement: RESOURCES\n      kind: resource-capacity\n    - id: arrangement-selection-authority\n      requirement: AUTHORITY\n      kind: predicate\n      predicate:\n        op: exists\n        table: arrangementAuthorities\n        where:\n          arrangement:\n            ref: choice.arrangement\n          orderId:\n            ref: parameter.orderId\n          orderRevision:\n            ref: parameter.orderRevision\n          recipient:\n            ref: parameter.recipient\n          shipDate:\n            ref: parameter.shipDate\n          profileVersion:\n            ref: parameter.profileVersion\n        test:\n          op: and\n          args:\n            - op: lte\n              args:\n                - ref: row.start\n                - ref: parameter.actionReady\n            - op: gt\n              args:\n                - ref: row.end\n                - ref: parameter.actionReady\n    - id: scoped-final-release-grant\n      requirement: AUTHORITY\n      kind: predicate\n      predicate:\n        op: exists\n        table: grants\n        where:\n          actor:\n            ref: parameter.releaseActor\n          action:\n            literal: release\n          arrangement:\n            ref: choice.arrangement\n          shipPoint:\n            ref: derived.shipPoint\n          orderId:\n            ref: parameter.orderId\n          orderRevision:\n            ref: parameter.orderRevision\n          recipient:\n            ref: parameter.recipient\n          shipDate:\n            ref: parameter.shipDate\n          profileVersion:\n            ref: parameter.profileVersion\n        test:\n          op: and\n          args:\n            - op: lte\n              args:\n                - ref: row.start\n                - ref: activity.release.start\n            - op: gte\n              args:\n                - ref: row.end\n                - ref: activity.release.end\n    - id: selection-not-in-the-past\n      requirement: TIME\n      kind: predicate\n      predicate:\n        op: gte\n        args:\n          - ref: parameter.actionReady\n          - ref: parameter.currentTime\n    - id: verification-fee-before-response\n      requirement: TIME\n      kind: predicate\n      predicate:\n        op: lte\n        args:\n          - ref: parameter.studyFeeAt\n          - ref: parameter.actionReady\n    - id: reserve-before-cutoff\n      requirement: TIME\n      kind: predicate\n      predicate:\n        op: lte\n        args:\n          - ref: parameter.actionReady\n          - ref: parameter.reservationDeadline\n    - id: preparation-before-departure\n      requirement: TIME\n      kind: predicate\n      predicate:\n        op: lte\n        args:\n          - ref: activity.release.end\n          - ref: derived.departure\n    - id: receipt-by-required-time\n      requirement: TIME\n      kind: predicate\n      predicate:\n        op: lte\n        args:\n          - ref: derived.arrival\n          - ref: parameter.receiptDeadline\n    - id: receipt-within-access-window\n      requirement: ACCESS\n      kind: predicate\n      predicate:\n        op: and\n        args:\n          - op: lte\n            args:\n              - ref: parameter.receiptOpen\n              - ref: derived.arrival\n          - op: lt\n            args:\n              - ref: derived.arrival\n              - ref: parameter.receiptClose\n    - id: total-expense-limit\n      requirement: COST\n      kind: predicate\n      predicate:\n        op: lte\n        args:\n          - ref: finance.expense\n          - ref: parameter.expenseLimit\n    - id: peak-cash-limit\n      requirement: COST\n      kind: predicate\n      predicate:\n        op: lte\n        args:\n          - ref: finance.peakCash\n          - ref: parameter.cashLimit\n    - id: scoped-verification-purchase-grant\n      requirement: AUTHORITY\n      kind: predicate\n      predicate:\n        op: or\n        args:\n          - op: eq\n            args:\n              - ref: parameter.studyFee\n              - literal: 0\n          - op: and\n            args:\n              - op: lte\n                args:\n                  - ref: parameter.studyFee\n                  - ref: parameter.studyPurchaseCap\n              - op: exists\n                table: studyPurchaseGrants\n                where:\n                  actor:\n                    ref: parameter.studyPurchaser\n                  orderId:\n                    ref: parameter.orderId\n                  orderRevision:\n                    ref: parameter.orderRevision\n                  recipient:\n                    ref: parameter.recipient\n                  shipDate:\n                    ref: parameter.shipDate\n                  profileVersion:\n                    ref: parameter.profileVersion\n                  action:\n                    literal: purchase-verification\n                test:\n                  op: and\n                  args:\n                    - op: lte\n                      args:\n                        - ref: row.start\n                        - ref: parameter.studyFeeAt\n                    - op: gt\n                      args:\n                        - ref: row.end\n                        - ref: parameter.studyFeeAt\n                    - op: gte\n                      args:\n                        - ref: row.ceiling\n                        - ref: parameter.studyFee\n    - id: reviewed-arrangement-policy\n      requirement: SUFFICIENCY\n      kind: predicate\n      predicate:\n        op: in\n        args:\n          - ref: choice.arrangement\n          - literal: [direct, backup, consolidated]\n    - id: scoped-consolidation-slot\n      requirement: SLOT\n      kind: predicate\n      predicate:\n        op: or\n        args:\n          - op: not\n            args:\n              - op: in\n                args:\n                  - ref: choice.arrangement\n                  - literal: [consolidated]\n          - op: exists\n            table: slotConfirmations\n            where:\n              arrangement:\n                ref: choice.arrangement\n              shipPoint:\n                ref: derived.shipPoint\n              orderId:\n                ref: parameter.orderId\n              orderRevision:\n                ref: parameter.orderRevision\n              recipient:\n                ref: parameter.recipient\n              shipDate:\n                ref: parameter.shipDate\n              profileVersion:\n                ref: parameter.profileVersion\n              status:\n                literal: confirmed\n            test:\n              op: and\n              args:\n                - op: lte\n                  args:\n                    - ref: row.confirmedAt\n                    - ref: parameter.reservationDeadline\n                - op: lte\n                  args:\n                    - ref: row.confirmedAt\n                    - ref: row.knownAt\n                - op: lte\n                  args:\n                    - ref: row.knownAt\n                    - ref: parameter.actionReady\n                - op: lte\n                  args:\n                    - ref: row.validFrom\n                    - ref: derived.slotStart\n                - op: gte\n                  args:\n                    - ref: row.validUntil\n                    - ref: derived.departure\n  finance:\n    mode: expense-and-cash\n    charges:\n      - id: verification-fee\n        amount:\n          ref: parameter.studyFee\n        at:\n          ref: parameter.studyFeeAt\n      - id: complete-arrangement-fee\n        amount:\n          op: lookup\n          table: arrangements\n          where:\n            id:\n              ref: choice.arrangement\n          column: fee\n        at:\n          ref: parameter.actionReady\n    holds: []\n  labels:\n    plan: Shipment arrangement\n    object: Order\n    actor: Responsible worker\n    service: Shipment arrangement\n    departure: Carrier departure\n    arrival: Customer receipt\n    expense: Total shipment expense\n    choice.arrangement: Arrangement\n    activity.pack: Pack the complete order\n    activity.release: Review and authorize final release\n    resource.packing-bench: Packing bench\n    scenario.stateId: Possible transportation state\n    input.actionReady: Arrangement selection time\n    input.reservationDeadline: Reservation cutoff\n    input.receiptDeadline: Required receipt time\n    input.studyFee: One verification fee\n    table.slotConfirmations: Current consolidation slot status\n    table.slotConfirmations.arrangement: Shipment arrangement\n    table.slotConfirmations.status: Current slot status\n    table.slotConfirmations.knownAt: Known to the team at\n    table.slotConfirmations.confirmedAt: Supplier confirmed at\n    table.slotConfirmations.validFrom: Slot valid from\n    table.slotConfirmations.validUntil: Slot valid until\n    table.slotConfirmations.slotReference: Supplier slot reference\n    derived.slotStart: Required loading window starts\ncase:\n  id: SHIP-104-CONSOLIDATION-UNCONFIRMED-r1\n  parameters:\n    orderId: ORD-104\n    orderRevision: \"1\"\n    recipient: DC-X\n    shipDate: \"2026-11-18\"\n    profileVersion: \"1.0.0\"\n    currentTime: 480\n    actionReady: 480\n    reservationDeadline: 720\n    receiptDeadline: 5340\n    receiptOpen: 3600\n    receiptClose: 5341\n    expenseLimit: 500000\n    cashLimit: 650000\n    studyFee: 0\n    studyFeeAt: 480\n    quantity: 100\n    packDuration: 120\n    releaseDuration: 30\n    packActor: packing-lead\n    releaseActor: release-officer\n    studyPurchaseCap: 25000\n    studyPurchaser: finance-reviewer\n  tables:\n    arrangements:\n      - id: direct\n        shipPoint: SP-A\n        fee: 400000\n        departure: 1440\n        travelDuration: 3600\n        capacity: 100\n      - id: backup\n        shipPoint: SP-B\n        fee: 600000\n        departure: 1440\n        travelDuration: 2160\n        capacity: 100\n      - id: consolidated\n        shipPoint: SP-B\n        fee: 500000\n        departure: 1440\n        travelDuration: 2520\n        capacity: 100\n    states:\n      - id: registered\n        registered: true\n    readiness:\n      - stateId: registered\n        shipPoint: SP-A\n        registered: true\n        orderId: ORD-104\n        orderRevision: \"1\"\n        recipient: DC-X\n        shipDate: \"2026-11-18\"\n        profileVersion: \"1.0.0\"\n      - stateId: registered\n        shipPoint: SP-B\n        registered: true\n        orderId: ORD-104\n        orderRevision: \"1\"\n        recipient: DC-X\n        shipDate: \"2026-11-18\"\n        profileVersion: \"1.0.0\"\n    scenarios:\n      - id: registered\n        stateId: registered\n    actors:\n      - id: packing-lead\n      - id: release-officer\n    capabilities:\n      - actor: packing-lead\n        action: pack\n      - actor: release-officer\n        action: release\n    calendars:\n      - actor: packing-lead\n        start: 480\n        end: 1440\n      - actor: release-officer\n        start: 480\n        end: 1440\n    resources:\n      - id: packing-lead\n        capacity: 1\n      - id: release-officer\n        capacity: 1\n      - id: packing-bench\n        capacity: 1\n    bookings: []\n    grants:\n      - id: RELEASE-direct\n        actor: release-officer\n        action: release\n        arrangement: direct\n        shipPoint: SP-A\n        orderId: ORD-104\n        orderRevision: \"1\"\n        recipient: DC-X\n        shipDate: \"2026-11-18\"\n        profileVersion: \"1.0.0\"\n        start: 480\n        end: 1440\n      - id: RELEASE-backup\n        actor: release-officer\n        action: release\n        arrangement: backup\n        shipPoint: SP-B\n        orderId: ORD-104\n        orderRevision: \"1\"\n        recipient: DC-X\n        shipDate: \"2026-11-18\"\n        profileVersion: \"1.0.0\"\n        start: 480\n        end: 1440\n      - id: RELEASE-consolidated\n        actor: release-officer\n        action: release\n        arrangement: consolidated\n        shipPoint: SP-B\n        orderId: ORD-104\n        orderRevision: \"1\"\n        recipient: DC-X\n        shipDate: \"2026-11-18\"\n        profileVersion: \"1.0.0\"\n        start: 480\n        end: 1440\n    arrangementAuthorities:\n      - arrangement: direct\n        orderId: ORD-104\n        orderRevision: \"1\"\n        recipient: DC-X\n        shipDate: \"2026-11-18\"\n        profileVersion: \"1.0.0\"\n        start: 480\n        end: 721\n      - arrangement: backup\n        orderId: ORD-104\n        orderRevision: \"1\"\n        recipient: DC-X\n        shipDate: \"2026-11-18\"\n        profileVersion: \"1.0.0\"\n        start: 480\n        end: 721\n      - arrangement: consolidated\n        orderId: ORD-104\n        orderRevision: \"1\"\n        recipient: DC-X\n        shipDate: \"2026-11-18\"\n        profileVersion: \"1.0.0\"\n        start: 480\n        end: 721\n    studyPurchaseGrants:\n      - id: STUDY-PURCHASE-1\n        actor: finance-reviewer\n        action: purchase-verification\n        orderId: ORD-104\n        orderRevision: \"1\"\n        recipient: DC-X\n        shipDate: \"2026-11-18\"\n        profileVersion: \"1.0.0\"\n        start: 480\n        end: 720\n        ceiling: 25000\n    slotConfirmations: []\n  provenance:\n    - id: FICTIONAL-CONSOLIDATION-AUTHORING-EXAMPLE\n      description: \"Continuation of the controlled shipment comparison: same registered ship points and baseline obligations; explicit $5,000 expense and $6,500 cash limits; fictional consolidated quote with scoped release/selection grants. No slot confirmation is supplied in the starter case. These are teaching inputs, not supplier records or operating permission.\"\n",
-    "sourceHash": "24d1c36941d7e12396870576f6f64b4324212f7aa79126144f45353b50b3c59e",
+    "name": "Resolve a shipment exception",
+    "description": "Compare supported complete shipment arrangements before their booking cutoffs. Prefer the lowest complete expense; use earlier arrival only to break equal-expense ties. A current quote and exact-scope operating records remain mandatory. Planned follow-up never creates a supporting record.",
+    "source": "# Canonical Decision Lab data. Rules are data, never executable code.\nformat: complete-a-commitment/1\nmodule:\n  id: shipment-exception-response\n  title: Resolve a shipment exception\n  description: \"Compare supported complete shipment arrangements before their booking cutoffs. Prefer the lowest complete expense; use earlier arrival only to break equal-expense ties. A current quote and exact-scope operating records remain mandatory. Planned follow-up never creates a supporting record.\"\n  preference:\n    direction: min\n    expression:\n      ref: finance.expense\n    then:\n      - direction: min\n        expression:\n          ref: derived.arrival\n  version: \"2.0.0\"\n  metadata:\n    catalog:\n      domain:\n        id: order-fulfillment\n        label: Order fulfillment\n        description: \"Review delivery commitments, operating prerequisites and shipment arrangements.\"\n      useCase:\n        id: review-first-shipment\n        label: Review a first shipment\n        description: Review one shipment before committing money to an arrangement.\n  question: \"Which supported arrangement protects this shipment commitment at the lowest complete expense?\"\n  template:\n    id: complete-a-commitment\n    version: 1\n  units:\n    time: minute\n    timeOrigin: \"Minute 0 is 2026-11-17T00:00:00-06:00; fixed UTC-06:00 for this bounded shipment horizon.\"\n    money: USD cent\n    count: unit of resource capacity\n    quantity: case\n  assumptions: [\"This fictional case contains one accepted order revision for 100 cases, complete mutually exclusive arrangements and a fixed receipt commitment. Direct, Backup and Consolidated are the only reviewed arrangement identities; an unfamiliar option must receive an authored policy before it can pass.\", The listed operating states are a reviewed projection of the evidence result. No probabilities are inferred from evidence or used to remove a mandatory scenario., Direct transportation requires registered SP-A. The backup uses independently registered SP-B in either state. Portal presence does not establish transportation registration., \"Each arrangement includes all packing, release and freight expense in its quoted fee. Preparation and resource use are explicitly checked and add no separate charge.\", \"The accepted 100 cases are stipulated to be available to either complete arrangement; this profile does not perform inventory allocation, manufacturing or replenishment.\", \"All tasks use half-open intervals. Packing starts when the arrangement can be selected; final release follows packing and must finish before the fixed offered departure.\", \"studyFee is one prospective or incurred verification fee counted once. The payment time is studyFeeAt, and the complete quoted arrangement fee is paid when that arrangement can be selected. There are no deposits, refunds, revenue or additional financing.\", A complete static arrangement is assessed against every retained state. Learning may later choose among these complete arrangements only through separately checked report branches., A nonzero verification fee needs an independently recorded scoped purchase grant and study-purchase cap at its payment time. Missing authority cannot be replaced by available budget or positive expected benefit., \"Both SP-A and SP-B are stipulated transportation-registered for the exact shipment scope. Consolidated uses the already registered SP-B; this example does not establish a new ship point registration.\", \"slotConfirmations is a complete current-status register, not a history of events. Its arrangement key permits at most one resolved current record per arrangement. The logistics coordinator must reconcile conflicting messages to status conflicting, and replace a cancelled confirmation with status cancelled; duplicate current rows are invalid inputs. The model does not authenticate supplier messages or reconcile an event stream.\", \"Consolidated needs status confirmed for this arrangement, ship point, order revision, recipient, ship date and profile. Confirmation must exist and be known at selection time, be confirmed by the reservation cutoff, and cover the full half-open 60-minute loading window immediately before carrier departure. Missing, cancelled, conflicting, late or incorrectly scoped confirmation does not establish the requirement. This checks the recorded slot; it does not schedule loading work or resolve physical dock capacity conflicts.\", \"Direct and Backup retain their original operating policies. The slot condition applies only to the authored Consolidated identity, while the separate reviewed-arrangement policy rejects unknown identities. No case checkbox can disable this prerequisite.\", \"Company policy is cost first among complete arrangements meeting the delivery promise, then arrival. Earlier arrival alone does not justify premium spending. Quote validity, permissions and the current assessment time are explicit recorded inputs; changes require reassessment.\", \"A quote is a current supplied record with its own identity, revision, shipment scope, knowledge and validity times, and carrier booking cutoff. Assessment does not authenticate it. Booking is distinct from delivery; revision of the customer promise is distinct from satisfying the original promise.\"]\n  inputs:\n    parameters:\n      orderId:\n        type: string\n      orderRevision:\n        type: string\n      recipient:\n        type: string\n      shipDate:\n        type: string\n      profileVersion:\n        type: string\n      currentTime:\n        type: integer\n        unit: time\n        minimum: 0\n      actionReady:\n        type: integer\n        unit: time\n        minimum: 0\n      reservationDeadline:\n        type: integer\n        unit: time\n        minimum: 0\n      receiptDeadline:\n        type: integer\n        unit: time\n        minimum: 0\n      receiptOpen:\n        type: integer\n        unit: time\n        minimum: 0\n      receiptClose:\n        type: integer\n        unit: time\n        minimum: 0\n      expenseLimit:\n        type: integer\n        unit: money\n        minimum: 0\n      cashLimit:\n        type: integer\n        unit: money\n        minimum: 0\n      studyFee:\n        type: integer\n        unit: money\n        minimum: 0\n      studyFeeAt:\n        type: integer\n        unit: time\n        minimum: 0\n      quantity:\n        type: integer\n        unit: quantity\n        minimum: 1\n      packDuration:\n        type: integer\n        unit: time\n        minimum: 1\n      releaseDuration:\n        type: integer\n        unit: time\n        minimum: 1\n      packActor:\n        type: string\n        references:\n          table: actors\n          column: id\n      releaseActor:\n        type: string\n        references:\n          table: actors\n          column: id\n      studyPurchaseCap:\n        type: integer\n        unit: money\n        minimum: 0\n      studyPurchaser:\n        type: string\n    tables:\n      arrangements:\n        key: [id]\n        columns:\n          id:\n            type: string\n          shipPoint:\n            type: string\n          fee:\n            type: integer\n            unit: money\n            minimum: 0\n          departure:\n            type: integer\n            unit: time\n            minimum: 0\n          travelDuration:\n            type: integer\n            unit: time\n            minimum: 0\n          capacity:\n            type: integer\n            unit: quantity\n            minimum: 0\n          quoteId:\n            type: string\n          quoteRevision:\n            type: string\n          quoteOrderId:\n            type: string\n          quoteOrderRevision:\n            type: string\n          quoteKnownAt:\n            type: integer\n            unit: time\n            minimum: 0\n          quoteValidFrom:\n            type: integer\n            unit: time\n            minimum: 0\n          quoteValidUntil:\n            type: integer\n            unit: time\n            minimum: 0\n          bookingCutoff:\n            type: integer\n            unit: time\n            minimum: 0\n      states:\n        key: [id]\n        columns:\n          id:\n            type: string\n          registered:\n            type: boolean\n      readiness:\n        key: [stateId, shipPoint]\n        columns:\n          stateId:\n            type: string\n            references:\n              table: states\n              column: id\n          shipPoint:\n            type: string\n          registered:\n            type: boolean\n          orderId:\n            type: string\n          orderRevision:\n            type: string\n          recipient:\n            type: string\n          shipDate:\n            type: string\n          profileVersion:\n            type: string\n      scenarios:\n        key: [id]\n        columns:\n          id:\n            type: string\n          stateId:\n            type: string\n            references:\n              table: states\n              column: id\n      actors:\n        key: [id]\n        columns:\n          id:\n            type: string\n      capabilities:\n        key: [actor, action]\n        columns:\n          actor:\n            type: string\n            references:\n              table: actors\n              column: id\n          action:\n            type: string\n      calendars:\n        key: [actor, start, end]\n        columns:\n          actor:\n            type: string\n            references:\n              table: actors\n              column: id\n          start:\n            type: integer\n            unit: time\n            minimum: 0\n          end:\n            type: integer\n            unit: time\n            minimum: 0\n      resources:\n        key: [id]\n        columns:\n          id:\n            type: string\n          capacity:\n            type: integer\n            unit: count\n            minimum: 0\n      bookings:\n        key: [id]\n        columns:\n          id:\n            type: string\n          resource:\n            type: string\n            references:\n              table: resources\n              column: id\n          start:\n            type: integer\n            unit: time\n            minimum: 0\n          end:\n            type: integer\n            unit: time\n            minimum: 0\n          amount:\n            type: integer\n            unit: count\n            minimum: 0\n      grants:\n        key: [id]\n        columns:\n          id:\n            type: string\n          actor:\n            type: string\n            references:\n              table: actors\n              column: id\n          action:\n            type: string\n          arrangement:\n            type: string\n            references:\n              table: arrangements\n              column: id\n          shipPoint:\n            type: string\n          orderId:\n            type: string\n          orderRevision:\n            type: string\n          recipient:\n            type: string\n          shipDate:\n            type: string\n          profileVersion:\n            type: string\n          start:\n            type: integer\n            unit: time\n            minimum: 0\n          end:\n            type: integer\n            unit: time\n            minimum: 0\n      arrangementAuthorities:\n        key: [arrangement]\n        columns:\n          arrangement:\n            type: string\n            references:\n              table: arrangements\n              column: id\n          orderId:\n            type: string\n          orderRevision:\n            type: string\n          recipient:\n            type: string\n          shipDate:\n            type: string\n          profileVersion:\n            type: string\n          start:\n            type: integer\n            unit: time\n            minimum: 0\n          end:\n            type: integer\n            unit: time\n            minimum: 0\n          shipPoint:\n            type: string\n      studyPurchaseGrants:\n        key: [id]\n        columns:\n          id:\n            type: string\n          actor:\n            type: string\n          action:\n            type: string\n          orderId:\n            type: string\n          orderRevision:\n            type: string\n          recipient:\n            type: string\n          shipDate:\n            type: string\n          profileVersion:\n            type: string\n          start:\n            type: integer\n            unit: time\n            minimum: 0\n          end:\n            type: integer\n            unit: time\n            minimum: 0\n          ceiling:\n            type: integer\n            unit: money\n            minimum: 0\n      slotConfirmations:\n        key: [arrangement]\n        columns:\n          arrangement:\n            type: string\n            references:\n              table: arrangements\n              column: id\n          shipPoint:\n            type: string\n          orderId:\n            type: string\n          orderRevision:\n            type: string\n          recipient:\n            type: string\n          shipDate:\n            type: string\n          profileVersion:\n            type: string\n          slotReference:\n            type: string\n          status:\n            type: string\n          confirmedAt:\n            type: integer\n            unit: time\n            minimum: 0\n          knownAt:\n            type: integer\n            unit: time\n            minimum: 0\n          validFrom:\n            type: integer\n            unit: time\n            minimum: 0\n          validUntil:\n            type: integer\n            unit: time\n            minimum: 0\n  choices:\n    - id: arrangement\n      domain:\n        table: arrangements\n        column: id\n  scenarioDomain:\n    table: scenarios\n  lookupCoverage:\n    - table: readiness\n      keys:\n        stateId:\n          domain:\n            table: scenarios\n            column: stateId\n        shipPoint:\n          domain:\n            table: arrangements\n            column: shipPoint\n  derived:\n    - id: shipPoint\n      type: string\n      expr:\n        op: lookup\n        table: arrangements\n        where:\n          id:\n            ref: choice.arrangement\n        column: shipPoint\n    - id: departure\n      type: integer\n      unit: time\n      expr:\n        op: lookup\n        table: arrangements\n        where:\n          id:\n            ref: choice.arrangement\n        column: departure\n    - id: travelDuration\n      type: integer\n      unit: time\n      expr:\n        op: lookup\n        table: arrangements\n        where:\n          id:\n            ref: choice.arrangement\n        column: travelDuration\n    - id: arrival\n      type: integer\n      unit: time\n      expr:\n        op: add\n        args:\n          - ref: derived.departure\n          - ref: derived.travelDuration\n    - id: slotStart\n      type: integer\n      unit: time\n      expr:\n        op: sub\n        args:\n          - ref: derived.departure\n          - literal: 60\n    - id: quoteKnownAt\n      type: integer\n      unit: time\n      expr:\n        op: lookup\n        table: arrangements\n        where:\n          id:\n            ref: choice.arrangement\n        column: quoteKnownAt\n    - id: quoteValidFrom\n      type: integer\n      unit: time\n      expr:\n        op: lookup\n        table: arrangements\n        where:\n          id:\n            ref: choice.arrangement\n        column: quoteValidFrom\n    - id: quoteValidUntil\n      type: integer\n      unit: time\n      expr:\n        op: lookup\n        table: arrangements\n        where:\n          id:\n            ref: choice.arrangement\n        column: quoteValidUntil\n    - id: bookingCutoff\n      type: integer\n      unit: time\n      expr:\n        op: lookup\n        table: arrangements\n        where:\n          id:\n            ref: choice.arrangement\n        column: bookingCutoff\n    - id: bookingSlack\n      type: integer\n      unit: time\n      expr:\n        op: sub\n        args:\n          - ref: derived.bookingCutoff\n          - ref: parameter.currentTime\n  activities:\n    - id: pack\n      actor:\n        ref: parameter.packActor\n      start:\n        ref: parameter.actionReady\n      duration:\n        ref: parameter.packDuration\n      resources:\n        - resource:\n            ref: parameter.packActor\n          amount:\n            literal: 1\n        - resource:\n            literal: packing-bench\n          amount:\n            literal: 1\n    - id: release\n      actor:\n        ref: parameter.releaseActor\n      start:\n        ref: activity.pack.end\n      duration:\n        ref: parameter.releaseDuration\n      resources:\n        - resource:\n            ref: parameter.releaseActor\n          amount:\n            literal: 1\n  resources:\n    definitions:\n      table: resources\n      idColumn: id\n      capacityColumn: capacity\n    bookings:\n      table: bookings\n      resourceColumn: resource\n      startColumn: start\n      endColumn: end\n      amountColumn: amount\n  requirements:\n    - id: SUFFICIENCY\n      label: Complete accepted order\n      meaning: The arrangement carries the accepted quantity using a transportation-registered ship point for this exact shipment scope.\n      waivable: false\n    - id: RESOURCES\n      label: Preparation staff and workspace\n      meaning: \"Packing and release have the necessary capabilities, calendars and shared capacity for their complete durations.\"\n      waivable: false\n    - id: AUTHORITY\n      label: \"Purchase, arrangement and final release permission\"\n      meaning: \"Recorded authorities cover verification purchase, arrangement selection and final release for the same order revision, recipient, shipment date and profile. A budget ceiling does not create permission.\"\n      waivable: false\n    - id: TIME\n      label: \"Reservation, preparation and receipt\"\n      meaning: \"Select by the reservation cutoff, finish preparation before departure and meet the receipt deadline.\"\n      waivable: false\n    - id: ACCESS\n      label: Receiving window\n      meaning: Arrival falls within the declared half-open receiving window.\n      waivable: false\n    - id: COST\n      label: Total expense and cash\n      meaning: The quoted arrangement fee plus the single prospective or incurred verification fee stay within expense and peak-cash limits.\n      waivable: false\n    - id: SLOT\n      label: Confirmed consolidation slot\n      meaning: \"Consolidated freight needs a resolved current supplier slot confirmation for this exact shipment, known at selection and covering the full 60-minute loading window immediately before departure.\"\n      waivable: false\n    - id: QUOTE\n      label: Current scoped carrier offer\n      meaning: \"The supplied quote covers the current order revision, is already known, remains valid at selection, and can still be booked by its carrier cutoff.\"\n      waivable: false\n  constraints:\n    - id: capacity-for-complete-order\n      requirement: SUFFICIENCY\n      kind: predicate\n      predicate:\n        op: gte\n        args:\n          - op: lookup\n            table: arrangements\n            where:\n              id:\n                ref: choice.arrangement\n            column: capacity\n          - ref: parameter.quantity\n    - id: scoped-transportation-registration\n      requirement: SUFFICIENCY\n      kind: predicate\n      predicate:\n        op: exists\n        table: readiness\n        where:\n          stateId:\n            ref: scenario.stateId\n          shipPoint:\n            ref: derived.shipPoint\n          registered:\n            literal: true\n          orderId:\n            ref: parameter.orderId\n          orderRevision:\n            ref: parameter.orderRevision\n          recipient:\n            ref: parameter.recipient\n          shipDate:\n            ref: parameter.shipDate\n          profileVersion:\n            ref: parameter.profileVersion\n    - id: pack-capability\n      requirement: RESOURCES\n      kind: predicate\n      predicate:\n        op: exists\n        table: capabilities\n        where:\n          actor:\n            ref: activity.pack.actor\n          action:\n            literal: pack\n    - id: pack-availability\n      requirement: RESOURCES\n      kind: predicate\n      predicate:\n        op: interval-covered\n        table: calendars\n        where:\n          actor:\n            ref: activity.pack.actor\n        start:\n          ref: activity.pack.start\n        end:\n          ref: activity.pack.end\n        startColumn: start\n        endColumn: end\n    - id: release-capability\n      requirement: RESOURCES\n      kind: predicate\n      predicate:\n        op: exists\n        table: capabilities\n        where:\n          actor:\n            ref: activity.release.actor\n          action:\n            literal: release\n    - id: release-availability\n      requirement: RESOURCES\n      kind: predicate\n      predicate:\n        op: interval-covered\n        table: calendars\n        where:\n          actor:\n            ref: activity.release.actor\n        start:\n          ref: activity.release.start\n        end:\n          ref: activity.release.end\n        startColumn: start\n        endColumn: end\n    - id: combined-resource-capacity\n      requirement: RESOURCES\n      kind: resource-capacity\n    - id: arrangement-selection-authority\n      requirement: AUTHORITY\n      kind: predicate\n      predicate:\n        op: exists\n        table: arrangementAuthorities\n        where:\n          arrangement:\n            ref: choice.arrangement\n          orderId:\n            ref: parameter.orderId\n          orderRevision:\n            ref: parameter.orderRevision\n          recipient:\n            ref: parameter.recipient\n          shipDate:\n            ref: parameter.shipDate\n          profileVersion:\n            ref: parameter.profileVersion\n          shipPoint:\n            ref: derived.shipPoint\n        test:\n          op: and\n          args:\n            - op: lte\n              args:\n                - ref: row.start\n                - ref: parameter.actionReady\n            - op: gt\n              args:\n                - ref: row.end\n                - ref: parameter.actionReady\n    - id: scoped-final-release-grant\n      requirement: AUTHORITY\n      kind: predicate\n      predicate:\n        op: exists\n        table: grants\n        where:\n          actor:\n            ref: parameter.releaseActor\n          action:\n            literal: release\n          arrangement:\n            ref: choice.arrangement\n          shipPoint:\n            ref: derived.shipPoint\n          orderId:\n            ref: parameter.orderId\n          orderRevision:\n            ref: parameter.orderRevision\n          recipient:\n            ref: parameter.recipient\n          shipDate:\n            ref: parameter.shipDate\n          profileVersion:\n            ref: parameter.profileVersion\n        test:\n          op: and\n          args:\n            - op: lte\n              args:\n                - ref: row.start\n                - ref: activity.release.start\n            - op: gte\n              args:\n                - ref: row.end\n                - ref: activity.release.end\n    - id: selection-not-in-the-past\n      requirement: TIME\n      kind: predicate\n      predicate:\n        op: gte\n        args:\n          - ref: parameter.actionReady\n          - ref: parameter.currentTime\n    - id: verification-fee-before-response\n      requirement: TIME\n      kind: predicate\n      predicate:\n        op: lte\n        args:\n          - ref: parameter.studyFeeAt\n          - ref: parameter.actionReady\n    - id: reserve-before-cutoff\n      requirement: TIME\n      kind: predicate\n      predicate:\n        op: lte\n        args:\n          - ref: parameter.actionReady\n          - ref: parameter.reservationDeadline\n    - id: preparation-before-departure\n      requirement: TIME\n      kind: predicate\n      predicate:\n        op: lte\n        args:\n          - ref: activity.release.end\n          - ref: derived.departure\n    - id: receipt-by-required-time\n      requirement: TIME\n      kind: predicate\n      predicate:\n        op: lte\n        args:\n          - ref: derived.arrival\n          - ref: parameter.receiptDeadline\n    - id: receipt-within-access-window\n      requirement: ACCESS\n      kind: predicate\n      predicate:\n        op: and\n        args:\n          - op: lte\n            args:\n              - ref: parameter.receiptOpen\n              - ref: derived.arrival\n          - op: lt\n            args:\n              - ref: derived.arrival\n              - ref: parameter.receiptClose\n    - id: total-expense-limit\n      requirement: COST\n      kind: predicate\n      predicate:\n        op: lte\n        args:\n          - ref: finance.expense\n          - ref: parameter.expenseLimit\n    - id: peak-cash-limit\n      requirement: COST\n      kind: predicate\n      predicate:\n        op: lte\n        args:\n          - ref: finance.peakCash\n          - ref: parameter.cashLimit\n    - id: scoped-verification-purchase-grant\n      requirement: AUTHORITY\n      kind: predicate\n      predicate:\n        op: or\n        args:\n          - op: eq\n            args:\n              - ref: parameter.studyFee\n              - literal: 0\n          - op: and\n            args:\n              - op: lte\n                args:\n                  - ref: parameter.studyFee\n                  - ref: parameter.studyPurchaseCap\n              - op: exists\n                table: studyPurchaseGrants\n                where:\n                  actor:\n                    ref: parameter.studyPurchaser\n                  orderId:\n                    ref: parameter.orderId\n                  orderRevision:\n                    ref: parameter.orderRevision\n                  recipient:\n                    ref: parameter.recipient\n                  shipDate:\n                    ref: parameter.shipDate\n                  profileVersion:\n                    ref: parameter.profileVersion\n                  action:\n                    literal: purchase-verification\n                test:\n                  op: and\n                  args:\n                    - op: lte\n                      args:\n                        - ref: row.start\n                        - ref: parameter.studyFeeAt\n                    - op: gt\n                      args:\n                        - ref: row.end\n                        - ref: parameter.studyFeeAt\n                    - op: gte\n                      args:\n                        - ref: row.ceiling\n                        - ref: parameter.studyFee\n    - id: reviewed-arrangement-policy\n      requirement: SUFFICIENCY\n      kind: predicate\n      predicate:\n        op: in\n        args:\n          - ref: choice.arrangement\n          - literal: [direct, backup, consolidated]\n    - id: scoped-consolidation-slot\n      requirement: SLOT\n      kind: predicate\n      predicate:\n        op: or\n        args:\n          - op: not\n            args:\n              - op: in\n                args:\n                  - ref: choice.arrangement\n                  - literal: [consolidated]\n          - op: exists\n            table: slotConfirmations\n            where:\n              arrangement:\n                ref: choice.arrangement\n              shipPoint:\n                ref: derived.shipPoint\n              orderId:\n                ref: parameter.orderId\n              orderRevision:\n                ref: parameter.orderRevision\n              recipient:\n                ref: parameter.recipient\n              shipDate:\n                ref: parameter.shipDate\n              profileVersion:\n                ref: parameter.profileVersion\n              status:\n                literal: confirmed\n            test:\n              op: and\n              args:\n                - op: lte\n                  args:\n                    - ref: row.confirmedAt\n                    - ref: parameter.reservationDeadline\n                - op: lte\n                  args:\n                    - ref: row.confirmedAt\n                    - ref: row.knownAt\n                - op: lte\n                  args:\n                    - ref: row.knownAt\n                    - ref: parameter.actionReady\n                - op: lte\n                  args:\n                    - ref: row.validFrom\n                    - ref: derived.slotStart\n                - op: gte\n                  args:\n                    - ref: row.validUntil\n                    - ref: derived.departure\n    - id: quote-covers-current-order\n      requirement: QUOTE\n      kind: predicate\n      predicate:\n        op: and\n        args:\n          - op: eq\n            args:\n              - op: lookup\n                table: arrangements\n                where:\n                  id:\n                    ref: choice.arrangement\n                column: quoteOrderId\n              - ref: parameter.orderId\n          - op: eq\n            args:\n              - op: lookup\n                table: arrangements\n                where:\n                  id:\n                    ref: choice.arrangement\n                column: quoteOrderRevision\n              - ref: parameter.orderRevision\n    - id: quote-known-and-current\n      requirement: QUOTE\n      kind: predicate\n      predicate:\n        op: and\n        args:\n          - op: lte\n            args:\n              - ref: derived.quoteKnownAt\n              - ref: parameter.currentTime\n          - op: lte\n            args:\n              - ref: derived.quoteValidFrom\n              - ref: parameter.actionReady\n          - op: lt\n            args:\n              - ref: parameter.actionReady\n              - ref: derived.quoteValidUntil\n    - id: carrier-booking-cutoff\n      requirement: TIME\n      kind: predicate\n      predicate:\n        op: lte\n        args:\n          - ref: parameter.actionReady\n          - ref: derived.bookingCutoff\n  finance:\n    mode: expense-and-cash\n    charges:\n      - id: verification-fee\n        amount:\n          ref: parameter.studyFee\n        at:\n          ref: parameter.studyFeeAt\n      - id: complete-arrangement-fee\n        amount:\n          op: lookup\n          table: arrangements\n          where:\n            id:\n              ref: choice.arrangement\n          column: fee\n        at:\n          ref: parameter.actionReady\n    holds: []\n  labels:\n    plan: Shipment arrangement\n    object: Order\n    actor: Responsible worker\n    service: Shipment arrangement\n    departure: Carrier departure\n    arrival: Customer receipt\n    expense: Total shipment expense\n    choice.arrangement: Arrangement\n    activity.pack: Pack the complete order\n    activity.release: Review and authorize final release\n    resource.packing-bench: Packing bench\n    scenario.stateId: Possible transportation state\n    input.actionReady: Arrangement selection time\n    input.reservationDeadline: Reservation cutoff\n    input.receiptDeadline: Required receipt time\n    input.studyFee: One verification fee\n    table.slotConfirmations: Current consolidation slot status\n    table.slotConfirmations.arrangement: Shipment arrangement\n    table.slotConfirmations.status: Current slot status\n    table.slotConfirmations.knownAt: Known to the team at\n    table.slotConfirmations.confirmedAt: Supplier confirmed at\n    table.slotConfirmations.validFrom: Slot valid from\n    table.slotConfirmations.validUntil: Slot valid until\n    table.slotConfirmations.slotReference: Supplier slot reference\n    derived.slotStart: Required loading window starts\n    constraint.quote-covers-current-order: Quote covers this order revision\n    constraint.quote-known-and-current: Quote is known and valid at selection\n    constraint.carrier-booking-cutoff: Carrier booking remains open\n    bookingCutoff: Carrier booking cutoff\n    quoteValidUntil: \"Quote valid until (exclusive)\"\n    bookingSlack: Time remaining before carrier cutoff\ncase:\n  id: SHIP-104-CONSOLIDATION-UNCONFIRMED-r1\n  parameters:\n    orderId: ORD-104\n    orderRevision: \"1\"\n    recipient: DC-X\n    shipDate: \"2026-11-18\"\n    profileVersion: \"1.0.0\"\n    currentTime: 480\n    actionReady: 480\n    reservationDeadline: 720\n    receiptDeadline: 5340\n    receiptOpen: 3600\n    receiptClose: 5341\n    expenseLimit: 500000\n    cashLimit: 650000\n    studyFee: 0\n    studyFeeAt: 480\n    quantity: 100\n    packDuration: 120\n    releaseDuration: 30\n    packActor: packing-lead\n    releaseActor: release-officer\n    studyPurchaseCap: 25000\n    studyPurchaser: finance-reviewer\n  tables:\n    arrangements:\n      - id: direct\n        shipPoint: SP-A\n        fee: 400000\n        departure: 1440\n        travelDuration: 3600\n        capacity: 100\n        quoteId: QUOTE-direct-104\n        quoteRevision: \"1\"\n        quoteOrderId: ORD-104\n        quoteOrderRevision: \"1\"\n        quoteKnownAt: 450\n        quoteValidFrom: 450\n        quoteValidUntil: 721\n        bookingCutoff: 660\n      - id: backup\n        shipPoint: SP-B\n        fee: 600000\n        departure: 1440\n        travelDuration: 2160\n        capacity: 100\n        quoteId: QUOTE-backup-104\n        quoteRevision: \"1\"\n        quoteOrderId: ORD-104\n        quoteOrderRevision: \"1\"\n        quoteKnownAt: 450\n        quoteValidFrom: 450\n        quoteValidUntil: 721\n        bookingCutoff: 720\n      - id: consolidated\n        shipPoint: SP-B\n        fee: 500000\n        departure: 1440\n        travelDuration: 2520\n        capacity: 100\n        quoteId: QUOTE-consolidated-104\n        quoteRevision: \"1\"\n        quoteOrderId: ORD-104\n        quoteOrderRevision: \"1\"\n        quoteKnownAt: 450\n        quoteValidFrom: 450\n        quoteValidUntil: 721\n        bookingCutoff: 720\n    states:\n      - id: registered\n        registered: true\n    readiness:\n      - stateId: registered\n        shipPoint: SP-A\n        registered: true\n        orderId: ORD-104\n        orderRevision: \"1\"\n        recipient: DC-X\n        shipDate: \"2026-11-18\"\n        profileVersion: \"1.0.0\"\n      - stateId: registered\n        shipPoint: SP-B\n        registered: true\n        orderId: ORD-104\n        orderRevision: \"1\"\n        recipient: DC-X\n        shipDate: \"2026-11-18\"\n        profileVersion: \"1.0.0\"\n    scenarios:\n      - id: registered\n        stateId: registered\n    actors:\n      - id: packing-lead\n      - id: release-officer\n    capabilities:\n      - actor: packing-lead\n        action: pack\n      - actor: release-officer\n        action: release\n    calendars:\n      - actor: packing-lead\n        start: 480\n        end: 1440\n      - actor: release-officer\n        start: 480\n        end: 1440\n    resources:\n      - id: packing-lead\n        capacity: 1\n      - id: release-officer\n        capacity: 1\n      - id: packing-bench\n        capacity: 1\n    bookings: []\n    grants:\n      - id: RELEASE-direct\n        actor: release-officer\n        action: release\n        arrangement: direct\n        shipPoint: SP-A\n        orderId: ORD-104\n        orderRevision: \"1\"\n        recipient: DC-X\n        shipDate: \"2026-11-18\"\n        profileVersion: \"1.0.0\"\n        start: 480\n        end: 1440\n      - id: RELEASE-backup\n        actor: release-officer\n        action: release\n        arrangement: backup\n        shipPoint: SP-B\n        orderId: ORD-104\n        orderRevision: \"1\"\n        recipient: DC-X\n        shipDate: \"2026-11-18\"\n        profileVersion: \"1.0.0\"\n        start: 480\n        end: 1440\n      - id: RELEASE-consolidated\n        actor: release-officer\n        action: release\n        arrangement: consolidated\n        shipPoint: SP-B\n        orderId: ORD-104\n        orderRevision: \"1\"\n        recipient: DC-X\n        shipDate: \"2026-11-18\"\n        profileVersion: \"1.0.0\"\n        start: 480\n        end: 1440\n    arrangementAuthorities:\n      - arrangement: direct\n        orderId: ORD-104\n        orderRevision: \"1\"\n        recipient: DC-X\n        shipDate: \"2026-11-18\"\n        profileVersion: \"1.0.0\"\n        start: 480\n        end: 721\n        shipPoint: SP-A\n      - arrangement: backup\n        orderId: ORD-104\n        orderRevision: \"1\"\n        recipient: DC-X\n        shipDate: \"2026-11-18\"\n        profileVersion: \"1.0.0\"\n        start: 480\n        end: 721\n        shipPoint: SP-B\n      - arrangement: consolidated\n        orderId: ORD-104\n        orderRevision: \"1\"\n        recipient: DC-X\n        shipDate: \"2026-11-18\"\n        profileVersion: \"1.0.0\"\n        start: 480\n        end: 721\n        shipPoint: SP-B\n    studyPurchaseGrants:\n      - id: STUDY-PURCHASE-1\n        actor: finance-reviewer\n        action: purchase-verification\n        orderId: ORD-104\n        orderRevision: \"1\"\n        recipient: DC-X\n        shipDate: \"2026-11-18\"\n        profileVersion: \"1.0.0\"\n        start: 480\n        end: 720\n        ceiling: 25000\n    slotConfirmations: []\n  provenance:\n    - id: FICTIONAL-CONSOLIDATION-AUTHORING-EXAMPLE\n      description: \"Continuation of the controlled shipment comparison: same registered ship points and baseline obligations; explicit $5,000 expense and $6,500 cash limits; fictional consolidated quote with scoped release/selection grants. No slot confirmation is supplied in the starter case. These are teaching inputs, not supplier records or operating permission.\"\n",
+    "sourceHash": "3932c936b61ad09e66f699a98cd64f6f429bde722a6e0582bf034cea6e99f2da",
     "definitionHash": "681928cdfc0f220a5a206dfbabd76b2bb410406cbba7afc4fbbff0dae9831972",
     "definitionContract": {
       "id": "complete-a-commitment",
@@ -390,24 +390,24 @@
     "model": {
       "format": "complete-a-commitment/1",
       "module": {
-        "id": "shipment-arrangement-with-consolidation",
-        "title": "Shipment review with consolidation",
-        "description": "Compare Direct, Backup and Consolidated freight for the same order. Preserve the existing mandatory shipment checks; Consolidated additionally needs a current, scoped slot confirmation known by selection time and valid for its full 60-minute loading window before departure. Rank eligible arrangements by arrival, then complete expense.",
+        "id": "shipment-exception-response",
+        "title": "Resolve a shipment exception",
+        "description": "Compare supported complete shipment arrangements before their booking cutoffs. Prefer the lowest complete expense; use earlier arrival only to break equal-expense ties. A current quote and exact-scope operating records remain mandatory. Planned follow-up never creates a supporting record.",
         "preference": {
           "direction": "min",
           "expression": {
-            "ref": "derived.arrival"
+            "ref": "finance.expense"
           },
           "then": [
             {
               "direction": "min",
               "expression": {
-                "ref": "finance.expense"
+                "ref": "derived.arrival"
               }
             }
           ]
         },
-        "version": "1.0.0",
+        "version": "2.0.0",
         "metadata": {
           "catalog": {
             "domain": {
@@ -422,7 +422,7 @@
             }
           }
         },
-        "question": "Which complete arrangement can meet this shipment commitment under every remaining transportation state?",
+        "question": "Which supported arrangement protects this shipment commitment at the lowest complete expense?",
         "template": {
           "id": "complete-a-commitment",
           "version": 1
@@ -440,16 +440,16 @@
           "Direct transportation requires registered SP-A. The backup uses independently registered SP-B in either state. Portal presence does not establish transportation registration.",
           "Each arrangement includes all packing, release and freight expense in its quoted fee. Preparation and resource use are explicitly checked and add no separate charge.",
           "The accepted 100 cases are stipulated to be available to either complete arrangement; this profile does not perform inventory allocation, manufacturing or replenishment.",
-          "The complete issued-grant registry, calendar, bookings and quoted capacities remain stable. Computing a proposal does not purchase verification, reserve freight, grant permission or release stock.",
           "All tasks use half-open intervals. Packing starts when the arrangement can be selected; final release follows packing and must finish before the fixed offered departure.",
-          "Reservation must be possible by minute 720, independently of receipt by minute 5340. Equal-time completion at either inclusive deadline is allowed.",
           "studyFee is one prospective or incurred verification fee counted once. The payment time is studyFeeAt, and the complete quoted arrangement fee is paid when that arrangement can be selected. There are no deposits, refunds, revenue or additional financing.",
           "A complete static arrangement is assessed against every retained state. Learning may later choose among these complete arrangements only through separately checked report branches.",
           "A nonzero verification fee needs an independently recorded scoped purchase grant and study-purchase cap at its payment time. Missing authority cannot be replaced by available budget or positive expected benefit.",
           "Both SP-A and SP-B are stipulated transportation-registered for the exact shipment scope. Consolidated uses the already registered SP-B; this example does not establish a new ship point registration.",
           "slotConfirmations is a complete current-status register, not a history of events. Its arrangement key permits at most one resolved current record per arrangement. The logistics coordinator must reconcile conflicting messages to status conflicting, and replace a cancelled confirmation with status cancelled; duplicate current rows are invalid inputs. The model does not authenticate supplier messages or reconcile an event stream.",
           "Consolidated needs status confirmed for this arrangement, ship point, order revision, recipient, ship date and profile. Confirmation must exist and be known at selection time, be confirmed by the reservation cutoff, and cover the full half-open 60-minute loading window immediately before carrier departure. Missing, cancelled, conflicting, late or incorrectly scoped confirmation does not establish the requirement. This checks the recorded slot; it does not schedule loading work or resolve physical dock capacity conflicts.",
-          "Direct and Backup retain their original operating policies. The slot condition applies only to the authored Consolidated identity, while the separate reviewed-arrangement policy rejects unknown identities. No case checkbox can disable this prerequisite."
+          "Direct and Backup retain their original operating policies. The slot condition applies only to the authored Consolidated identity, while the separate reviewed-arrangement policy rejects unknown identities. No case checkbox can disable this prerequisite.",
+          "Company policy is cost first among complete arrangements meeting the delivery promise, then arrival. Earlier arrival alone does not justify premium spending. Quote validity, permissions and the current assessment time are explicit recorded inputs; changes require reassessment.",
+          "A quote is a current supplied record with its own identity, revision, shipment scope, knowledge and validity times, and carrier booking cutoff. Assessment does not authenticate it. Booking is distinct from delivery; revision of the customer promise is distinct from satisfying the original promise."
         ],
         "inputs": {
           "parameters": {
@@ -586,6 +586,38 @@
                 "capacity": {
                   "type": "integer",
                   "unit": "quantity",
+                  "minimum": 0
+                },
+                "quoteId": {
+                  "type": "string"
+                },
+                "quoteRevision": {
+                  "type": "string"
+                },
+                "quoteOrderId": {
+                  "type": "string"
+                },
+                "quoteOrderRevision": {
+                  "type": "string"
+                },
+                "quoteKnownAt": {
+                  "type": "integer",
+                  "unit": "time",
+                  "minimum": 0
+                },
+                "quoteValidFrom": {
+                  "type": "integer",
+                  "unit": "time",
+                  "minimum": 0
+                },
+                "quoteValidUntil": {
+                  "type": "integer",
+                  "unit": "time",
+                  "minimum": 0
+                },
+                "bookingCutoff": {
+                  "type": "integer",
+                  "unit": "time",
                   "minimum": 0
                 }
               }
@@ -848,6 +880,9 @@
                   "type": "integer",
                   "unit": "time",
                   "minimum": 0
+                },
+                "shipPoint": {
+                  "type": "string"
                 }
               }
             },
@@ -1064,6 +1099,82 @@
                 }
               ]
             }
+          },
+          {
+            "id": "quoteKnownAt",
+            "type": "integer",
+            "unit": "time",
+            "expr": {
+              "op": "lookup",
+              "table": "arrangements",
+              "where": {
+                "id": {
+                  "ref": "choice.arrangement"
+                }
+              },
+              "column": "quoteKnownAt"
+            }
+          },
+          {
+            "id": "quoteValidFrom",
+            "type": "integer",
+            "unit": "time",
+            "expr": {
+              "op": "lookup",
+              "table": "arrangements",
+              "where": {
+                "id": {
+                  "ref": "choice.arrangement"
+                }
+              },
+              "column": "quoteValidFrom"
+            }
+          },
+          {
+            "id": "quoteValidUntil",
+            "type": "integer",
+            "unit": "time",
+            "expr": {
+              "op": "lookup",
+              "table": "arrangements",
+              "where": {
+                "id": {
+                  "ref": "choice.arrangement"
+                }
+              },
+              "column": "quoteValidUntil"
+            }
+          },
+          {
+            "id": "bookingCutoff",
+            "type": "integer",
+            "unit": "time",
+            "expr": {
+              "op": "lookup",
+              "table": "arrangements",
+              "where": {
+                "id": {
+                  "ref": "choice.arrangement"
+                }
+              },
+              "column": "bookingCutoff"
+            }
+          },
+          {
+            "id": "bookingSlack",
+            "type": "integer",
+            "unit": "time",
+            "expr": {
+              "op": "sub",
+              "args": [
+                {
+                  "ref": "derived.bookingCutoff"
+                },
+                {
+                  "ref": "parameter.currentTime"
+                }
+              ]
+            }
           }
         ],
         "activities": [
@@ -1175,6 +1286,12 @@
             "id": "SLOT",
             "label": "Confirmed consolidation slot",
             "meaning": "Consolidated freight needs a resolved current supplier slot confirmation for this exact shipment, known at selection and covering the full 60-minute loading window immediately before departure.",
+            "waivable": false
+          },
+          {
+            "id": "QUOTE",
+            "label": "Current scoped carrier offer",
+            "meaning": "The supplied quote covers the current order revision, is already known, remains valid at selection, and can still be booked by its carrier cutoff.",
             "waivable": false
           }
         ],
@@ -1345,6 +1462,9 @@
                 },
                 "profileVersion": {
                   "ref": "parameter.profileVersion"
+                },
+                "shipPoint": {
+                  "ref": "derived.shipPoint"
                 }
               },
               "test": {
@@ -1824,6 +1944,111 @@
                 }
               ]
             }
+          },
+          {
+            "id": "quote-covers-current-order",
+            "requirement": "QUOTE",
+            "kind": "predicate",
+            "predicate": {
+              "op": "and",
+              "args": [
+                {
+                  "op": "eq",
+                  "args": [
+                    {
+                      "op": "lookup",
+                      "table": "arrangements",
+                      "where": {
+                        "id": {
+                          "ref": "choice.arrangement"
+                        }
+                      },
+                      "column": "quoteOrderId"
+                    },
+                    {
+                      "ref": "parameter.orderId"
+                    }
+                  ]
+                },
+                {
+                  "op": "eq",
+                  "args": [
+                    {
+                      "op": "lookup",
+                      "table": "arrangements",
+                      "where": {
+                        "id": {
+                          "ref": "choice.arrangement"
+                        }
+                      },
+                      "column": "quoteOrderRevision"
+                    },
+                    {
+                      "ref": "parameter.orderRevision"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "quote-known-and-current",
+            "requirement": "QUOTE",
+            "kind": "predicate",
+            "predicate": {
+              "op": "and",
+              "args": [
+                {
+                  "op": "lte",
+                  "args": [
+                    {
+                      "ref": "derived.quoteKnownAt"
+                    },
+                    {
+                      "ref": "parameter.currentTime"
+                    }
+                  ]
+                },
+                {
+                  "op": "lte",
+                  "args": [
+                    {
+                      "ref": "derived.quoteValidFrom"
+                    },
+                    {
+                      "ref": "parameter.actionReady"
+                    }
+                  ]
+                },
+                {
+                  "op": "lt",
+                  "args": [
+                    {
+                      "ref": "parameter.actionReady"
+                    },
+                    {
+                      "ref": "derived.quoteValidUntil"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": "carrier-booking-cutoff",
+            "requirement": "TIME",
+            "kind": "predicate",
+            "predicate": {
+              "op": "lte",
+              "args": [
+                {
+                  "ref": "parameter.actionReady"
+                },
+                {
+                  "ref": "derived.bookingCutoff"
+                }
+              ]
+            }
           }
         ],
         "finance": {
@@ -1882,7 +2107,13 @@
           "table.slotConfirmations.validFrom": "Slot valid from",
           "table.slotConfirmations.validUntil": "Slot valid until",
           "table.slotConfirmations.slotReference": "Supplier slot reference",
-          "derived.slotStart": "Required loading window starts"
+          "derived.slotStart": "Required loading window starts",
+          "constraint.quote-covers-current-order": "Quote covers this order revision",
+          "constraint.quote-known-and-current": "Quote is known and valid at selection",
+          "constraint.carrier-booking-cutoff": "Carrier booking remains open",
+          "bookingCutoff": "Carrier booking cutoff",
+          "quoteValidUntil": "Quote valid until (exclusive)",
+          "bookingSlack": "Time remaining before carrier cutoff"
         }
       },
       "case": {
@@ -1919,7 +2150,15 @@
               "fee": 400000,
               "departure": 1440,
               "travelDuration": 3600,
-              "capacity": 100
+              "capacity": 100,
+              "quoteId": "QUOTE-direct-104",
+              "quoteRevision": "1",
+              "quoteOrderId": "ORD-104",
+              "quoteOrderRevision": "1",
+              "quoteKnownAt": 450,
+              "quoteValidFrom": 450,
+              "quoteValidUntil": 721,
+              "bookingCutoff": 660
             },
             {
               "id": "backup",
@@ -1927,7 +2166,15 @@
               "fee": 600000,
               "departure": 1440,
               "travelDuration": 2160,
-              "capacity": 100
+              "capacity": 100,
+              "quoteId": "QUOTE-backup-104",
+              "quoteRevision": "1",
+              "quoteOrderId": "ORD-104",
+              "quoteOrderRevision": "1",
+              "quoteKnownAt": 450,
+              "quoteValidFrom": 450,
+              "quoteValidUntil": 721,
+              "bookingCutoff": 720
             },
             {
               "id": "consolidated",
@@ -1935,7 +2182,15 @@
               "fee": 500000,
               "departure": 1440,
               "travelDuration": 2520,
-              "capacity": 100
+              "capacity": 100,
+              "quoteId": "QUOTE-consolidated-104",
+              "quoteRevision": "1",
+              "quoteOrderId": "ORD-104",
+              "quoteOrderRevision": "1",
+              "quoteKnownAt": 450,
+              "quoteValidFrom": 450,
+              "quoteValidUntil": 721,
+              "bookingCutoff": 720
             }
           ],
           "states": [
@@ -2070,7 +2325,8 @@
               "shipDate": "2026-11-18",
               "profileVersion": "1.0.0",
               "start": 480,
-              "end": 721
+              "end": 721,
+              "shipPoint": "SP-A"
             },
             {
               "arrangement": "backup",
@@ -2080,7 +2336,8 @@
               "shipDate": "2026-11-18",
               "profileVersion": "1.0.0",
               "start": 480,
-              "end": 721
+              "end": 721,
+              "shipPoint": "SP-B"
             },
             {
               "arrangement": "consolidated",
@@ -2090,7 +2347,8 @@
               "shipDate": "2026-11-18",
               "profileVersion": "1.0.0",
               "start": 480,
-              "end": 721
+              "end": 721,
+              "shipPoint": "SP-B"
             }
           ],
           "studyPurchaseGrants": [
@@ -2129,9 +2387,9 @@
     "reports": [],
     "defaultReport": null,
     "originWorkspaceId": null,
-    "createdAt": "2026-11-17T20:00:00.000Z",
-    "contentHash": "389fc6f51baf8f14424fe4da2cea612bc6c12f0248126ff5c682cb1d263e191c"
+    "createdAt": "2026-11-18T14:00:00.000Z",
+    "contentHash": "0cce758147637a6e7d3461a78987ccf7313574a52446aadadc2fecd16902ba1b"
   },
   "sourceProvenance": "generated",
-  "contentHash": "9a10492b24acf94db41a24ea90aee6d371c8de0d4797a6f334ba72e52205070a"
+  "contentHash": "7d9b4d46f3df0743f239016d26e40003560b1f7c07ee96c497e7c02c964df001"
 }

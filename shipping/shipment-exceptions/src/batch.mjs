@@ -1,4 +1,5 @@
 import { CLI_EXIT_CODE } from '@decision-lab/cli';
+import { createDecisionLab } from '@decision-lab/sdk';
 import { createHash } from 'node:crypto';
 import { lstat, mkdir, mkdtemp, readFile, realpath, rename, rm, rmdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -9,6 +10,7 @@ import { invokeCLI } from './cli.mjs';
 import { projectRun, renderHTML, renderCSV } from './report.mjs';
 import { classify, nextAction } from './classify.mjs';
 import { BATCH_STATUS } from './semantics.mjs';
+import { createReviewJourney, inspectReviewJourney } from './reviewJourney.js';
 
 export const defaultConfig = fileURLToPath(new URL('../config.json', import.meta.url));
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -120,7 +122,7 @@ async function checkedPrevious(file, config) {
     if (run.input?.inputs?.id !== row.shipmentId || run.input?.inputs?.parameters?.orderId !== row.orderId) {
       throw new BatchError('A previous run belongs to a different shipment or order.', CLI_EXIT_CODE.INVALID_INPUT);
     }
-    rows.set(row.shipmentId, { projection, inputs: run.input.inputs });
+    rows.set(row.shipmentId, { projection, inputs: run.input.inputs, run });
   }
   return { rows, receipts };
 }
@@ -132,6 +134,7 @@ async function checkedPrevious(file, config) {
  * a changed order never overwrites the basis of an earlier proposal.
  */
 export async function runBatch(options) {
+  const lab = createDecisionLab();
   if (!options.inputDir || !options.retainedDir || !options.outputDir) throw new BatchError('--input, --retained and --output are required.', CLI_EXIT_CODE.INVALID_INPUT);
   const configFile = path.resolve(options.configFile ?? defaultConfig);
   const configBytes = await readFile(configFile);
@@ -139,6 +142,10 @@ export async function runBatch(options) {
   if (config.format !== 'shipment-exceptions-config/1' || !config.appFile || !config.binding) throw new BatchError('Unsupported batch configuration.', CLI_EXIT_CODE.INVALID_INPUT);
   const appFile = path.resolve(path.dirname(configFile), config.appFile);
   const appBytes = await readFile(appFile);
+  const workflowFile = path.resolve(path.dirname(configFile), config.workflowFile);
+  const workflowBytes = await readFile(workflowFile);
+  const definition = lab.workflows.open(JSON.parse(workflowBytes));
+  if (definition.contentHash !== config.workflowHash) throw new BatchError('The authored operating workflow differs from the configured version.', CLI_EXIT_CODE.INVALID_INPUT);
   if (sha256(appBytes) !== config.appFileSHA256) throw new BatchError('The pinned app file changed. Review its release and configuration before running.', CLI_EXIT_CODE.INVALID_INPUT);
   const createdAt = options.createdAt ?? new Date().toISOString();
   if (!/^\d{4}-\d\d-\d\dT.*(?:Z|[+-]\d\d:\d\d)$/.test(createdAt) || !Number.isFinite(Date.parse(createdAt))) throw new BatchError('--created-at needs an ISO timestamp with an offset.', CLI_EXIT_CODE.INVALID_INPUT);
@@ -146,10 +153,10 @@ export async function runBatch(options) {
   if (options.timeoutMs !== undefined && (!Number.isSafeInteger(options.timeoutMs) || options.timeoutMs < 1)) throw new BatchError('--timeout-ms must be a positive whole number.', CLI_EXIT_CODE.INVALID_INPUT);
   const output = path.resolve(options.outputDir);
   const previousFile = options.previousFile && path.resolve(options.previousFile);
-  const protectedPaths = [path.resolve(options.inputDir), path.resolve(options.retainedDir), configFile, appFile,
+  const protectedPaths = [path.resolve(options.inputDir), path.resolve(options.retainedDir), configFile, appFile, workflowFile,
     ...(previousFile ? [path.dirname(previousFile)] : [])];
   await assertFreshOutput(output, protectedPaths);
-  const batch = await loadBatch({ inputDir: options.inputDir, retainedDir: options.retainedDir, timeOrigin: config.timeOrigin, expectedCurrency: config.currency });
+  const batch = await loadBatch({ inputDir: options.inputDir, retainedDir: options.retainedDir, timeOrigin: config.timeOrigin, expectedCurrency: config.currency, asOf: options.asOf });
   // Individual read aliases may point beyond their containing input directory.
   await assertFreshOutput(output, [...protectedPaths, ...batch.sourceFiles]);
   const previousReceipt = previousFile && await fileReceipt(previousFile);
@@ -158,6 +165,7 @@ export async function runBatch(options) {
   const receipts = [...batch.sourceReceipts,
     { file: configFile, bytes: configBytes.length, sha256: sha256(configBytes) },
     { file: appFile, bytes: appBytes.length, sha256: sha256(appBytes) },
+    { file: workflowFile, bytes: workflowBytes.length, sha256: sha256(workflowBytes) },
     ...(previousReceipt ? [previousReceipt] : []), ...prior.receipts];
   for (const receipt of receipts) {
     if (!isDeepStrictEqual(receipt, await fileReceipt(receipt.file))) throw new BatchError(`Source changed during import: ${receipt.file}. Export a stable snapshot and rerun.`, CLI_EXIT_CODE.INVALID_INPUT);
@@ -204,6 +212,7 @@ export async function runBatch(options) {
       row.changes = previous.get(job.shipmentId)?.inputs ? compareInputs(previous.get(job.shipmentId).inputs, job.caseData) : [];
       row.deadline = new Date(Date.parse(config.timeOrigin) + job.caseData.parameters.reservationDeadline * 60_000).toISOString();
       const caseFile = path.join(directory, 'case.json');
+      let screeningRun = null;
       await writeFile(caseFile, json(job.caseData));
       row.links.push({ label: 'Canonical inputs', href: `${relative}/case.json` });
       const validated = await invokeCLI(['case', 'validate', '--app', appFile, '--case', caseFile, '--output', path.join(directory, 'validation.json')], transcript);
@@ -220,6 +229,10 @@ export async function runBatch(options) {
         if (options.maxPlans !== undefined) args.push('--max-plans', String(options.maxPlans));
         const evaluated = await invokeCLI(args, transcript);
         const run = await optionalJSON(path.join(directory, 'run.json'));
+        screeningRun = run;
+        if (run && previous.get(job.shipmentId)?.run) {
+          row.findingChanges = lab.reports.compareFindings({ before: previous.get(job.shipmentId).run, after: run });
+        }
         if (run) {
           row.links.push({ label: 'Full CLI report', href: `${relative}/run.json` });
           row.current = projectRun(run, { ...config, expectedBinding: config.binding });
@@ -235,6 +248,19 @@ export async function runBatch(options) {
         }
       }
       row.nextAction = nextAction(row);
+      if (screeningRun && lab.runs.validate(screeningRun).valid) {
+        // Screening is provisional. The portable native workflow retains the
+        // same case, prior finding and receipts; its imported inputs await review.
+        const review = createReviewJourney({ lab, app: openedApp, inputs: job.caseData,
+          definition,
+          owner: job.owner, sources: receipts.filter(receipt => job.sourceFiles.includes(receipt.file)),
+          screeningRun, previousRun: previous.get(job.shipmentId)?.run ?? null, createdAt,
+          runId: `shipment-${job.shipmentId}-${createdAt.replace(/[^0-9]/g, '')}` });
+        await writeFile(path.join(directory, 'review.json'), json(review));
+        row.actionWindows = inspectReviewJourney({ lab, run: review }).output.brief.sections.find(section => section.id === 'next-work')?.value ?? [];
+        row.links.unshift({ label: 'Continue this operating review', href: `${relative}/review.json` });
+        row.artifacts.review = await artifact(`${relative}/review.json`);
+      }
       for (const [key, name] of [['case', 'case.json'], ['validation', 'validation.json'], ['run', 'run.json'], ['sources', 'sources.json']]) {
         const receipt = await artifact(`${relative}/${name}`);
         if (receipt) row.artifacts[key] = receipt;

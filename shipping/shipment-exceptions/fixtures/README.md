@@ -1,18 +1,21 @@
-# Fixture notes
+# Fictional source snapshots
 
-All records in this directory are fictional. Order IDs and prices continue the public consolidation example; the extra orders make changes visible in a batch.
+Baseline and morning contain complete current CSVs; corresponding retained cases
+supply facts outside the adapter. New cost-first policy prefers Direct when both
+arrangements meet the promise. Morning SHIP-105 has a real Direct capacity failure
+and an old Consolidated slot, SHIP-106 lacks current authority, and SHIP-107 has an
+unsupported EUR quote. Import never creates a replacement authority or slot.
 
-`baseline` and `morning` each contain complete CSV snapshots. `retained/baseline` and `retained/morning` contain the independently supplied canonical cases used with those snapshots. Both snapshots use the same calculation time so an unchanged shipment reproduces the original result; the directory names describe the comparison, not timestamps inferred by the program. The fixed time origin is `2026-11-17T00:00:00-06:00`.
+Quotes retain their own identity/revision, order scope, knowledge and validity
+interval, and carrier booking cutoff. Direct's cutoff is 11:00, while the other
+arrangements close at noon. `--as-of 2026-11-17T11:30:00-06:00` applied to baseline
+records shows a genuine time-only change without editing any source document.
 
-| Shipment | Morning inputs | Intended review |
-| --- | --- | --- |
-| SHIP-104 | Same order, quotes, grants and slot | Consolidated remains preferred |
-| SHIP-105 | Revision 2, explicit current registration and authorities, revision-1 slot | Consolidated is blocked; Direct becomes preferred |
-| SHIP-106 | Revision 2 and current registration, revision-1 authorities and slot | No listed arrangement meets all recorded requirements |
-| SHIP-107 | Direct quote reports EUR rather than USD | Input error; do not produce a new assessment |
+Snapshot `current_at` values match deliberately. Directory names are labels, not
+inferred timestamps. `--created-at` describes artifacts; `--as-of` advances case
+assessment and selection readiness. The origin is November 17, 2026 at UTC−06:00.
 
-The revision-2 readiness and authority records in SHIP-105 were authored explicitly as fixture inputs. The importer never creates these records, grants authority, or copies an old record onto a new scope. SHIP-106 deliberately has no current authority. The slot exports retain revision 1 throughout.
-
-Packing and release actors have shipment-specific identifiers. The authored model uses the fixed, case-local `packing-bench` resource identifier; each retained case stipulates its own independent bench allocation. This example makes no claim that several shipments can share the same resource concurrently.
-
-Quote prices are complete USD shipment expenses, not freight-only charges. Each complete quote includes preparation, release and transport; there are no inferred extra fees. Timestamps include their UTC offsets and use whole minutes. The single slot row per arrangement is a resolved current-status register, not an event stream.
+Each case stipulates its own allocated bench and staff. Independent assessments
+do not establish joint feasibility for a fleet. Prices are complete expenses,
+not freight-only quotes. A slot snapshot is a resolved current-status register,
+not an event history; contradictory messages need explicit reconciliation.

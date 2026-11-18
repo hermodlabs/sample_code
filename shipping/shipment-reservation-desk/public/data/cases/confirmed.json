@@ -32,7 +32,15 @@
         "fee": 400000,
         "departure": 1440,
         "travelDuration": 3600,
-        "capacity": 100
+        "capacity": 100,
+        "quoteId": "Q-SHIP-104-direct",
+        "quoteRevision": "1",
+        "quoteOrderId": "ORD-104",
+        "quoteOrderRevision": "1",
+        "quoteKnownAt": 450,
+        "quoteValidFrom": 450,
+        "quoteValidUntil": 721,
+        "bookingCutoff": 660
       },
       {
         "id": "backup",
@@ -40,7 +48,15 @@
         "fee": 600000,
         "departure": 1440,
         "travelDuration": 2160,
-        "capacity": 100
+        "capacity": 100,
+        "quoteId": "Q-SHIP-104-backup",
+        "quoteRevision": "1",
+        "quoteOrderId": "ORD-104",
+        "quoteOrderRevision": "1",
+        "quoteKnownAt": 450,
+        "quoteValidFrom": 450,
+        "quoteValidUntil": 721,
+        "bookingCutoff": 720
       },
       {
         "id": "consolidated",
@@ -48,7 +64,15 @@
         "fee": 500000,
         "departure": 1440,
         "travelDuration": 2520,
-        "capacity": 100
+        "capacity": 100,
+        "quoteId": "Q-SHIP-104-consolidated",
+        "quoteRevision": "1",
+        "quoteOrderId": "ORD-104",
+        "quoteOrderRevision": "1",
+        "quoteKnownAt": 450,
+        "quoteValidFrom": 450,
+        "quoteValidUntil": 721,
+        "bookingCutoff": 720
       }
     ],
     "states": [
@@ -183,7 +207,8 @@
         "shipDate": "2026-11-18",
         "profileVersion": "1.0.0",
         "start": 480,
-        "end": 721
+        "end": 721,
+        "shipPoint": "SP-A"
       },
       {
         "arrangement": "backup",
@@ -193,7 +218,8 @@
         "shipDate": "2026-11-18",
         "profileVersion": "1.0.0",
         "start": 480,
-        "end": 721
+        "end": 721,
+        "shipPoint": "SP-B"
       },
       {
         "arrangement": "consolidated",
@@ -203,7 +229,8 @@
         "shipDate": "2026-11-18",
         "profileVersion": "1.0.0",
         "start": 480,
-        "end": 721
+        "end": 721,
+        "shipPoint": "SP-B"
       }
     ],
     "studyPurchaseGrants": [

@@ -270,13 +270,18 @@ function proposalText(projection, options) {
   return preferred.map(plan => `${plan.label ?? plan.arrangementId} — ${money(plan.expense, options)}; ${formatMinute(plan.arrivalMinutes, options)}`).join(' | ');
 }
 function messages(row) {
+  const impact = row.findingChanges?.available ? [
+    row.findingChanges.findings.feasibility.changed && 'Available complete responses changed.',
+    row.findingChanges.findings.preference.changed && 'The preferred response changed.',
+    row.findingChanges.findings.blockers.changed && 'Required follow-up changed.',
+  ].filter(Boolean) : [];
   const diagnostics = array(row.diagnostics).map(issue => typeof issue === 'string' ? issue
     : `${issue.path ? `${issue.path}: ` : ''}${issue.message ?? show(issue)}`);
   const blockers = array(row.current?.blockers).map(blocker => {
     const arrangement = array(row.current?.plans).find(plan => plan.arrangementId === blocker.arrangementId);
     return `${arrangement?.label ?? blocker.arrangementId}: failed check — ${blocker.label} (${blocker.scenarioId})`;
   });
-  return [...new Set([...diagnostics, ...array(row.current?.issues), ...blockers])];
+  return [...new Set([...impact, ...diagnostics, ...array(row.current?.issues), ...blockers])];
 }
 const statusNames = {
   [BATCH_STATUS.INPUT_ERROR]: 'Input correction required',
@@ -352,7 +357,9 @@ export function renderHTML(rows, metadata = {}) {
     if (column.key === 'diagnostics') return listElements(value);
     if (column.key === 'next') return element(React.Fragment, null,
       row.nextAction || 'Review the retained assessment and its recorded conditions.',
-      element('small', null, `Owner: ${row.owner || 'Not assigned'}`, element('br'), `Reservation cutoff: ${deadlineText(row.deadline, options)}`));
+      element('small', null, `Owner: ${row.owner || 'Not assigned'}`, element('br'), `Reservation cutoff: ${deadlineText(row.deadline, options)}`),
+      ...array(row.actionWindows).map(window => element('small', { key: window.arrangement },
+        `${options.labels?.arrangements?.[window.arrangement] ?? window.arrangement}: latest modeled start ${formatMinute(window.dueMinute, options)}; ${window.remainingMinutes} minutes remaining.`)));
     return value;
   });
   const details = rows.map((row, index) => `<section id="shipment-${index}" class="shipment">
@@ -363,6 +370,15 @@ export function renderHTML(rows, metadata = {}) {
     <h3>Source and assessment records</h3>${links(row)}${list(array(row.sources), source => escapeHTML(show(source)))}
     ${row.current?.identity ? `<p class="muted">Run ${escapeHTML(row.current.identity.runId)} · App ${escapeHTML(row.current.identity.appId)} release ${escapeHTML(row.current.identity.release)} · Input ${escapeHTML(row.current.identity.inputHash)}</p>` : ''}
   </section>`).join('');
+  const operating = metadata.operating ? `<section class="shipment"><h2>Recorded operating checks</h2>${records('shipment-operating', [
+    ['label', 'Question'], ['finding', 'Authored finding'],
+  ], [
+    ['Current sourced authorization', metadata.operating.authorizationRecorded],
+    ['Current sourced carrier reservation', metadata.operating.reservationRecorded],
+    ['Original delivery commitment completed', metadata.operating.originalCommitmentCompleted],
+    ['Escalation recorded', metadata.operating.escalationRecorded],
+  ].map(([label, passed]) => ({ label, finding: passed === true ? 'Recorded support passes' : 'Not established' })))}
+    <p>${escapeHTML(metadata.operating.meaning)}</p></section>` : '';
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>${escapeHTML(metadata.title || 'Shipment exceptions')}</title>
 <style>body{font:16px/1.55 system-ui,sans-serif;color:#18313f;background:#f4f6f7;margin:0}main{max-width:1500px;margin:auto;padding:32px;overflow-wrap:anywhere}h1,h2,h3{line-height:1.2}h1{margin-bottom:12px}h2{font-size:1.4rem}h3{font-size:1.05rem;margin-top:24px}a{color:#1e5975;text-underline-offset:3px}p{max-width:100ch}table{border-collapse:collapse;width:100%;table-layout:fixed;background:white}th,td{padding:14px;border:1px solid #dce3e8;vertical-align:top;text-align:left;overflow-wrap:anywhere}thead{background:#eaf0f4}small{display:block;margin-top:8px;color:#506577;font-size:.85em}ul{margin:0;padding-left:18px}li+li{margin-top:8px}.muted{color:#596b78;font-weight:400}.notice{border-left:4px solid #597c91;padding:16px 20px;background:#e9f0f5}.shipment{background:white;border:1px solid #dce3e8;border-radius:8px;padding:24px;margin:24px 0;scroll-margin-top:16px}.summary th:first-child{width:10%}.summary th:nth-child(2){width:12%}.summary th:nth-child(3),.summary th:nth-child(4){width:17%}.summary th:nth-child(5){width:22%}.summary th:nth-child(6){width:22%}@media(max-width:760px){main{padding:16px}table,thead,tbody,tr,th,td{display:block;width:auto!important}thead{position:absolute;width:1px!important;height:1px;overflow:hidden;clip-path:inset(50%)}tr{border:1px solid #b9cad5;margin-bottom:16px}td,th{border:0;border-bottom:1px solid #e3e9ed}td[data-label]::before{content:attr(data-label);display:block;font-weight:650;font-size:.85em;color:#506577;margin-bottom:5px}.shipment{padding:16px}}@media print{body{background:white}main{padding:0}.shipment{break-inside:avoid}a{color:inherit}}</style></head>
@@ -370,7 +386,7 @@ export function renderHTML(rows, metadata = {}) {
 <p class="notice">Fictional demonstration calculations awaiting human review. Each shipment is assessed independently against its recorded inputs and the pinned app rules. This report does not establish that shared resources can serve all shipments together. No freight is booked and no operating approval is granted.</p>
 <p>Compare the current proposal with its retained predecessor, then open the source and assessment records for any changed or blocked shipment. Tied preferred arrangements remain listed together.</p>
 <div class="summary">${summary}</div>
-${details}<footer><p class="muted">App: ${escapeHTML(metadata.app?.id || 'See each run')} · Pinned content: ${escapeHTML(metadata.app?.appHash || metadata.app?.contentHash || 'See retained app package')}<br>Time origin: ${escapeHTML(metadata.timeOrigin || 'Not supplied')}; display zone: ${escapeHTML(metadata.timeZone || 'UTC')}. Amounts: ${escapeHTML(metadata.currency || 'USD')}.</p></footer></main></body></html>\n`;
+${details}${operating}<footer><p class="muted">App: ${escapeHTML(metadata.app?.id || 'See each run')} · Pinned content: ${escapeHTML(metadata.app?.appHash || metadata.app?.contentHash || 'See retained app package')}<br>Time origin: ${escapeHTML(metadata.timeOrigin || 'Not supplied')}; display zone: ${escapeHTML(metadata.timeZone || 'UTC')}. Amounts: ${escapeHTML(metadata.currency || 'USD')}.</p></footer></main></body></html>\n`;
 }
 
 // Prefix spreadsheet formula markers, including those preceded by whitespace.
@@ -383,11 +399,12 @@ function csvCell(value) {
 }
 
 export function renderCSV(rows, options = {}) {
-  const headings = ['Shipment', 'Order', 'Revision', 'Status', 'Previous proposal', 'Current proposal', 'Conditions and diagnostics', 'Next action', 'Owner', 'Reservation cutoff', 'Changed inputs', 'Retained records'];
+  const headings = ['Shipment', 'Order', 'Revision', 'Status', 'Previous proposal', 'Current proposal', 'Conditions and diagnostics', 'Next action', 'Owner', 'Reservation cutoff', 'Response action windows', 'Changed inputs', 'Retained records'];
   const values = rows.map(row => [
     row.shipmentId, row.orderId, row.orderRevision, statusNames[row.status] ?? row.status,
     proposalText(row.before, options), proposalText(row.current, options), messages(row).join(' | '),
     row.nextAction, row.owner, deadlineText(row.deadline, options),
+    array(row.actionWindows).map(window => `${options.labels?.arrangements?.[window.arrangement] ?? window.arrangement}: latest modeled start ${formatMinute(window.dueMinute, options)}; ${window.remainingMinutes} minutes remaining`).join(' | '),
     array(row.changes).map(change => `${change.path}: ${show(change.before)} → ${show(change.after)}`).join(' | '),
     array(row.links).filter(link => localArtifactHref(link.href)).map(link => `${link.label}: ${link.href}`).join(' | '),
   ]);

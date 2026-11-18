@@ -9,6 +9,8 @@
   },
   "scripts": {
     "demo": "node run-demo.mjs",
+    "review": "node review-journeys.mjs",
+    "continue": "node continue-review.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {

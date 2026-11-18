@@ -1,24 +1,24 @@
 #!/usr/bin/env node
-import { CLI_EXIT_CODE } from '@decision-lab/cli';
+// Explicit demonstration judgments only. The ordinary review command never
+// silently accepts a person's input review, app finding or operating authority.
+import assert from 'node:assert/strict';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
-import { runPreflight } from './src/preflight.mjs';
-import { PREFLIGHT_STATUS } from './src/preflightStatus.js';
+import { runJourneyPreflight } from './src/journeyPreflight.mjs';
 
 try {
   const { values } = parseArgs({ options: { output: { type: 'string' } } });
-  const result = await runPreflight({
-    inputFile: fileURLToPath(new URL('./fixtures/campaigns.json', import.meta.url)),
+  console.log('Running six fictional campaigns through CLI evaluation and explicit synthetic reviews.');
+  console.log('The complete retained-history demonstration can take several minutes.');
+  const result = await runJourneyPreflight({
+    inputFile: fileURLToPath(new URL('./fixtures/journey-v3/campaigns.json', import.meta.url)),
     outputDir: values.output ?? fileURLToPath(new URL('./.output/demo', import.meta.url)),
+    acceptFictionalDemo: true,
   });
-  const actual = result.manifest.campaigns.map(row => row.status);
-  const expected = [PREFLIGHT_STATUS.ELIGIBLE, PREFLIGHT_STATUS.ELIGIBLE, PREFLIGHT_STATUS.BLOCKED, PREFLIGHT_STATUS.INPUT_ERROR];
-  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-    throw new Error(`Unexpected demo outcomes: ${actual.join(', ')}`);
-  }
-  console.log(`Verified four intended outcomes. Open ${result.outputDir}/campaigns.html`);
-  console.log('The ordinary review command returns exit 2 for this intentionally invalid fourth case.');
-} catch (error) {
-  console.error(error.message);
-  process.exitCode = error.exitCode ?? CLI_EXIT_CODE.OPERATIONAL_ERROR;
-}
+  assert.deepEqual(result.manifest.campaigns.map(row => row.status), ['eligible', 'eligible', 'blocked', 'blocked', 'eligible', 'blocked']);
+  assert.equal(result.manifest.campaigns[0].preferred[0].expenseMinor, 30000);
+  assert.equal(result.manifest.campaigns[1].preferred[0].expenseMinor, 40000);
+  assert.equal(result.manifest.campaigns[4].preferred[0].expenseMinor, 10000);
+  console.log(`Verified six fictional outcomes. Open ${result.outputDir}/campaigns.html`);
+  console.log('No operating decisions, spending authorizations, successful rehearsals or completed handoffs were invented.');
+} catch (error) { console.error(error.message); process.exitCode = 2; }

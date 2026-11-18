@@ -83,10 +83,22 @@ async function downloadRun(page) {
   return run;
 }
 
-const reviewArrangements = page => page.getByRole('button', { name: 'Review arrangements', exact: true }).click({ timeout: 45_000 });
+async function reviewInputs(page) {
+  const accept = page.getByRole('button', { name: 'Accept reviewed input records', exact: true });
+  if (await accept.isEnabled()) await accept.click();
+}
+async function reviewArrangements(page) {
+  await reviewInputs(page);
+  const button = page.getByRole('button', { name: 'Review arrangements', exact: true });
+  // Invalid form records remain pending and show their diagnostics. The app
+  // never auto-accepts them merely because a test asks to run the planner.
+  if (await button.isDisabled()) return;
+  await button.click({ timeout: 45_000 });
+}
 
 /** Dispatch two user actions before the worker can deliver a result task. */
 async function interruptReview(page, action) {
+  await reviewInputs(page);
   await page.waitForFunction(() => [...document.querySelectorAll('button')]
     .some(value => value.textContent.trim() === 'Review arrangements' && !value.disabled));
   await page.evaluate(async action => {
@@ -100,6 +112,8 @@ async function interruptReview(page, action) {
       const cancel = button('Cancel review');
       if (!cancel) throw new Error('The running review must offer cancellation.');
       cancel.click();
+    } else if (action.kind === 'restore') {
+      button('Restore saved review').click();
     } else if (action.kind === 'case') {
       const next = [...document.querySelectorAll('button')].find(value => value.textContent.includes(action.label));
       if (!next || next.disabled) throw new Error('A worked case must remain selectable while a review is running.');
@@ -159,7 +173,7 @@ try {
 
   const config = await json(path.join(root, 'public/data/config.json'));
   const selectCase = id => page.getByRole('button', { name: new RegExp(escapeRegex(config.cases.find(value => value.id === id).label)) }).click({ timeout: 45_000 });
-  const expected = { confirmed: ['consolidated'], revised: ['direct'], permissions: [] };
+  const expected = { confirmed: ['direct'], revised: [], permissions: [], urgent: ['consolidated'] };
   for (const [id, preferred] of Object.entries(expected)) {
     await selectCase(id);
     await reviewArrangements(page);
@@ -193,6 +207,13 @@ try {
       await page.setViewportSize({ width: 1440, height: 1000 });
     }
   }
+
+  await selectCase('confirmed');
+  await interruptReview(page, { kind: 'restore' });
+  await page.getByRole('alert').filter({ hasText: 'No saved review exists' }).waitFor();
+  await page.getByText('Records changed. Review again.', { exact: true }).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Cancel review', exact: true }).count(), 0, 'A failed restore does not leave a cancelled worker shown as running.');
+  checks.push('Restoring a missing saved review safely ends an in-flight assessment and allows reassessment');
 
   await selectCase('confirmed');
   await reviewArrangements(page);
@@ -279,6 +300,39 @@ try {
   assert.deepEqual(outcome(tied).plans.filter(plan => plan.preferred).map(plan => plan.arrangement), ['consolidated', 'direct']);
   assert.equal(await page.locator('.results-panel > [data-decision-view] [data-decision-option]').filter({ hasText: 'Equally preferred complete plan' }).count(), 2, 'The team view retains the SDK preference tie rather than inventing a winner.');
   checks.push('A genuine calculated preference tie is retained in both the native run and the team view');
+
+  // The tutorial handoff is a native workflow, not merely another copy of the
+  // input JSON. User review, choice, edits and local restore must survive it.
+  await page.getByRole('button', { name: 'Accept reviewed assessment', exact: true }).click();
+  await page.getByLabel('Arrangement to hand off', { exact: true }).selectOption('direct');
+  await page.getByRole('button', { name: 'Record chosen response', exact: true }).click();
+  await page.getByLabel('Complete quote amount', { exact: true }).fill('4990');
+  await page.getByRole('button', { name: 'Save this review locally', exact: true }).click();
+  const [continuationDownload] = await Promise.all([
+    page.waitForEvent('download'), page.getByRole('button', { name: 'Download continuation', exact: true }).click(),
+  ]);
+  const continuation = await json(await continuationDownload.path());
+  assert.equal(continuation.format, 'decision-lab-workflow-run/1');
+  assert.equal(continuation.case.inputs.tables.arrangements.find(row => row.id === 'direct').fee, 499000);
+  assert.equal(continuation.answers.inputs.status, 'awaiting-review', 'Exported edits await human review.');
+  assert.ok(continuation.case.journeyOperations.some(row => row.kind === 'decision'), 'The earlier choice remains in history.');
+  await page.getByLabel('Complete quote amount', { exact: true }).fill('4980');
+  await interruptReview(page, { kind: 'restore' });
+  await page.waitForTimeout(500);
+  await page.getByRole('group', { name: 'Arrangement to edit', exact: true }).getByRole('button', { name: 'Direct', exact: true }).click();
+  assert.equal(await page.getByLabel('Complete quote amount', { exact: true }).inputValue(), '4990.00');
+  assert.equal(await page.locator('.results-panel > [data-decision-view]').count(), 0, 'An obsolete worker response cannot replace a restored pending review.');
+  await page.getByLabel('Import canonical case JSON', { exact: true }).setInputFiles({ name: 'continued-review.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(continuation)) });
+  await page.getByLabel('Recorded reviewer', { exact: true }).fill('Taylor Reviewer');
+  await reviewArrangements(page);
+  const resumed = await downloadRun(page);
+  assert.equal(resumed.input.inputs.id, continuation.case.inputs.id);
+  assert.deepEqual(resumed.input.inputs, continuation.case.inputs);
+  const [reviewedDownload] = await Promise.all([
+    page.waitForEvent('download'), page.getByRole('button', { name: 'Download continuation', exact: true }).click(),
+  ]);
+  assert.equal((await json(await reviewedDownload.path())).answers.inputs.actor, 'Taylor Reviewer', 'Input review records the person named in the shared reviewer control.');
+  checks.push('Native continuation export flushes draft edits as pending, retains operating history, and restores safely during an in-flight review');
 
   assert.ok(workers.length > 0, 'The real browser worker ran.');
   assert.ok(workers.every(url => url.startsWith(base) && new URL(url).pathname.startsWith('/assets/') && !url.includes('/src/')), `Workers are emitted production assets: ${JSON.stringify(workers)}`);

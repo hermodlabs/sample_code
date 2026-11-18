@@ -108,10 +108,17 @@ export function toDraft(inputs, config) {
     confirmation[field] = record ? localTime(record[field], config) : '';
   }
   return {
+    asOf: localTime(inputs.parameters.currentTime, config),
     quotes: inputs.tables.arrangements.map(row => ({
       id: row.id, shipPoint: row.shipPoint, currency: config.currency,
       totalCost: decimal(row.fee), departure: localTime(row.departure, config),
       travelMinutes: String(row.travelDuration), capacity: String(row.capacity),
+      quoteId: row.quoteId, quoteRevision: row.quoteRevision,
+      quoteOrderId: row.quoteOrderId, quoteOrderRevision: row.quoteOrderRevision,
+      quoteKnownAt: localTime(row.quoteKnownAt, config),
+      quoteValidFrom: localTime(row.quoteValidFrom, config),
+      quoteValidUntil: localTime(row.quoteValidUntil, config),
+      bookingCutoff: localTime(row.bookingCutoff, config),
     })),
     confirmation,
   };
@@ -128,6 +135,11 @@ export function buildCase(base, draft, config) {
   // Cloning preserves readiness, resources and permissions exactly as supplied.
   // A changed quote or confirmation must never re-scope those other records.
   const result = structuredClone(base);
+  result.parameters.currentTime = read('asOf', draft.asOf, value => minuteFromLocal(value, config));
+  if (result.parameters.currentTime < base.parameters.currentTime) {
+    issues.push({ path: 'asOf', message: 'Assessment time cannot precede the imported case time.' });
+  }
+  result.parameters.actionReady = Math.max(base.parameters.actionReady, result.parameters.currentTime);
   result.tables.arrangements = base.tables.arrangements.map(original => {
     const row = draft.quotes.find(quote => quote.id === original.id);
     if (!row) {
@@ -148,6 +160,11 @@ export function buildCase(base, draft, config) {
       departure: read(`${path}.departure`, row.departure, value => minuteFromLocal(value, config)),
       travelDuration: read(`${path}.travelMinutes`, row.travelMinutes, whole),
       capacity: read(`${path}.capacity`, row.capacity, whole),
+      quoteId: read(`${path}.quoteId`, row.quoteId), quoteRevision: read(`${path}.quoteRevision`, row.quoteRevision),
+      quoteOrderId: read(`${path}.quoteOrderId`, row.quoteOrderId),
+      quoteOrderRevision: read(`${path}.quoteOrderRevision`, row.quoteOrderRevision),
+      ...Object.fromEntries(['quoteKnownAt', 'quoteValidFrom', 'quoteValidUntil', 'bookingCutoff'].map(field =>
+        [field, read(`${path}.${field}`, row[field], value => minuteFromLocal(value, config))])),
     };
   });
 
@@ -177,6 +194,38 @@ export function buildCase(base, draft, config) {
     result.tables.slotConfirmations = [confirmation];
   }
   if (issues.length) throw new FormError(issues);
+  return result;
+}
+
+/** Add a received record without copying the current revision onto an old grant.
+ * The supplied revision, location and interval remain the document's scope.
+ * Source authentication belongs to the team's integration, not this form.
+ */
+export function replaceSupportingRecord(base, record, config) {
+  const result = structuredClone(base), p = base.parameters;
+  for (const field of ['reference', 'orderId', 'orderRevision', 'recipient', 'shipDate', 'profileVersion', 'shipPoint']) required(record[field]);
+  if (!base.tables.arrangements.some(row => row.id === record.arrangement)) throw new Error('Choose a reviewed arrangement.');
+  const scope = { orderId: record.orderId, orderRevision: record.orderRevision, recipient: record.recipient,
+    shipDate: record.shipDate, profileVersion: record.profileVersion };
+  if (record.kind === 'readiness') {
+    if (base.tables.states.length !== 1) throw new Error('This desk requires one reviewed registration state; use a separately authored evidence review for unresolved states.');
+    if (!['true', 'false'].includes(record.registered)) throw new Error('Supply the actual registration finding.');
+    const value = { ...scope, stateId: base.tables.states[0].id, shipPoint: record.shipPoint, registered: record.registered === 'true' };
+    result.tables.readiness = [...result.tables.readiness.filter(row => !(row.stateId === value.stateId && row.shipPoint === value.shipPoint)), value];
+  } else {
+    const start = minuteFromLocal(record.start, config), end = minuteFromLocal(record.end, config);
+    if (end <= start) throw new Error('Permission validity must end after it begins.');
+    if (record.kind === 'reservation') {
+      const value = { ...scope, arrangement: record.arrangement, shipPoint: record.shipPoint, start, end };
+      result.tables.arrangementAuthorities = [...result.tables.arrangementAuthorities.filter(row => row.arrangement !== record.arrangement), value];
+    } else if (record.kind === 'release') {
+      const value = { ...scope, id: record.reference, actor: required(record.actor), action: 'release', arrangement: record.arrangement,
+        shipPoint: record.shipPoint, start, end };
+      result.tables.grants = [...result.tables.grants.filter(row => row.arrangement !== record.arrangement), value];
+    } else throw new Error('Choose a supported received-record type.');
+  }
+  if (result.provenance.some(row => row.id === record.reference)) throw new Error('This source reference is already retained. Import a distinct replacement record.');
+  result.provenance.push({ id: record.reference, description: `Received ${record.kind} record; scope and values supplied by the reviewer: ${JSON.stringify(record)}` });
   return result;
 }
 

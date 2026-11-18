@@ -1,37 +1,27 @@
-# Pinned data
+# Pinned teaching data
 
-All cases are fictional. The package `shipment-review.app.json` is copied byte
-for byte from `sample_code/shipping/shipment-exceptions/app/shipment-review.app.json`, which
-retains the published consolidated-shipment app. The application ID is
-`shipment-review-with-consolidation`, release `1`; exact package and rule hashes
-are recorded in `config.json`.
+`shipment-review.app.json` and `shipment.workflow.json` are identical to the CLI
+client's new immutable cost-first profile and authored operating workflow. Exact
+pins are retained in `config.json`. The earlier arrival-first package is archived
+under `shipment-exceptions/app/archive/`; marketplace releases are unchanged.
 
-The three canonical case files were generated once while authoring this
-example through the CLI example's `loadBatch()` adapter:
+Regenerate or verify copies from the repository root:
 
-| Browser fixture | Source snapshot | Source shipment |
-| --- | --- | --- |
-| `cases/confirmed.json` | `fixtures/baseline` with `fixtures/retained/baseline` | `SHIP-104` |
-| `cases/revised.json` | `fixtures/morning` with `fixtures/retained/morning` | `SHIP-105` |
-| `cases/permissions.json` | `fixtures/morning` with `fixtures/retained/morning` | `SHIP-106` |
+```sh
+node examples/shipping/clients/generate.mjs
+node examples/shipping/clients/generate.mjs --check
+```
 
-These paths are relative to `sample_code/shipping/shipment-exceptions`. The browser project
-does not import that adapter or read files outside its own directory at runtime.
+The complete cases come from the CLI's strict CSV adapter:
 
-SHIP-105's current registration and permissions were supplied explicitly in
-the authored source case. Its consolidation confirmation still covers revision
-1. SHIP-106 has current registration but retains revision-1 permissions and
-confirmation. Neither importer nor React form creates new authority by changing
-an old record's scope.
+| Case | Source |
+| --- | --- |
+| confirmed | Baseline SHIP-104 at 08:00; Direct is preferred on cost. |
+| revised | Morning SHIP-105; Direct lacks capacity and the consolidation slot covers the old revision. |
+| permissions | Morning SHIP-106; reservation and release grants cover the old revision. |
+| urgent | Baseline SHIP-104 assessed at 11:30; Direct's 11:00 cutoff has passed, Consolidated remains open until noon. |
 
-Preparation actors have shipment-specific IDs. The model's fixed, case-local
-`packing-bench` identifier represents a separately allocated bench in each
-case. These independent cases do not establish a feasible shared schedule.
-
-Costs are complete shipment expenses in integer USD cents. Times are elapsed
-whole minutes from `2026-11-17T00:00:00-06:00`, with a fixed UTC−06:00 display
-offset. The fixtures use a fixed review time so results remain reproducible.
-They are not live carrier offers or confirmations.
-
-`config.json` maps every authored constraint ID to a business label. These
-labels do not modify the requirements or their calculations.
+Every case contains the whole declared resource, calendar, readiness and grant
+basis. Shipments stipulate independent resource allocations. Money is whole USD
+cents; times are whole minutes from `2026-11-17T00:00:00-06:00` with a fixed UTC−06
+zone. They are reproducible fictional records, not current carrier offers.

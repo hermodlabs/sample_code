@@ -7,7 +7,7 @@ import { runBatch, batchErrorCode } from './src/batch.mjs';
 const usage = `Review changed shipment proposals using the existing Decision Lab CLI.
 
 node review-shipments.mjs --input DIRECTORY --retained DIRECTORY --output NEW_DIRECTORY
-  [--previous MANIFEST.json] [--config CONFIG.json] [--created-at ISO_TIMESTAMP]
+  [--previous MANIFEST.json] [--config CONFIG.json] [--as-of ISO_TIMESTAMP] [--created-at ISO_TIMESTAMP]
   [--timeout-ms INTEGER] [--max-plans INTEGER]
 
 Input directories contain complete current snapshots, not incremental events.
@@ -19,6 +19,7 @@ export async function main(args = process.argv.slice(2)) {
   if (args.length === 1 && args[0] === '--help') { process.stdout.write(usage); return CLI_EXIT_CODE.COMPLETED; }
   const names = { '--input': 'inputDir', '--retained': 'retainedDir', '--output': 'outputDir',
     '--previous': 'previousFile', '--config': 'configFile', '--created-at': 'createdAt',
+    '--as-of': 'asOf',
     '--timeout-ms': 'timeoutMs', '--max-plans': 'maxPlans' };
   try {
     const options = {};

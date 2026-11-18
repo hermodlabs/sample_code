@@ -15,6 +15,8 @@ export const ORDER_COLUMNS = Object.freeze([
 export const QUOTE_COLUMNS = Object.freeze([
   'shipment_id', 'order_id', 'order_revision', 'arrangement', 'ship_point', 'currency',
   'total_cost', 'departure_at', 'travel_minutes', 'capacity',
+  'quote_id', 'quote_revision', 'quote_known_at', 'quote_valid_from_at',
+  'quote_valid_until_at', 'booking_cutoff_at',
 ]);
 export const SLOT_COLUMNS = Object.freeze([
   'shipment_id', 'arrangement', 'ship_point', 'order_id', 'order_revision', 'recipient',
@@ -130,6 +132,12 @@ function quote(row, order, timeOrigin, expectedCurrency) {
     fee: usdCents(row.total_cost, 'total_cost'),
     departure: relativeMinute(row.departure_at, timeOrigin, 'departure_at'),
     travelDuration: integer(row.travel_minutes, 'travel_minutes'), capacity: integer(row.capacity, 'capacity'),
+    quoteId: required(row.quote_id, 'quote_id'), quoteRevision: required(row.quote_revision, 'quote_revision'),
+    quoteOrderId: row.order_id, quoteOrderRevision: row.order_revision,
+    quoteKnownAt: relativeMinute(row.quote_known_at, timeOrigin, 'quote_known_at'),
+    quoteValidFrom: relativeMinute(row.quote_valid_from_at, timeOrigin, 'quote_valid_from_at'),
+    quoteValidUntil: relativeMinute(row.quote_valid_until_at, timeOrigin, 'quote_valid_until_at'),
+    bookingCutoff: relativeMinute(row.booking_cutoff_at, timeOrigin, 'booking_cutoff_at'),
   };
 }
 
@@ -160,7 +168,7 @@ function duplicates(rows, key) {
  * The adapter deliberately never re-scopes those records to a new revision.
  * A new order may therefore become blocked even though it is valid input.
  */
-export async function loadBatch({ inputDir, retainedDir, timeOrigin, expectedCurrency = 'USD' }) {
+export async function loadBatch({ inputDir, retainedDir, timeOrigin, expectedCurrency = 'USD', asOf }) {
   if (!inputDir || !retainedDir) throw new InputError('inputDir and retainedDir are required.');
   instant(timeOrigin, 'timeOrigin');
   if (expectedCurrency !== 'USD') throw new InputError('This adapter only supports USD.');
@@ -209,6 +217,12 @@ export async function loadBatch({ inputDir, retainedDir, timeOrigin, expectedCur
       continue;
     }
     const parameters = capture('orders.csv', orderRows[0].line, () => orderParameters(row, timeOrigin, expectedCurrency));
+    if (parameters && asOf !== undefined) capture('orders.csv', orderRows[0].line, () => {
+      const currentTime = relativeMinute(asOf, timeOrigin, '--as-of');
+      if (currentTime < parameters.currentTime) throw new InputError('--as-of cannot precede the imported record snapshot time.');
+      parameters.currentTime = currentTime;
+      parameters.actionReady = Math.max(parameters.actionReady, currentTime);
+    });
     capture('orders.csv', orderRows[0].line, () => required(row.owner, 'owner'));
     capture('orders.csv', orderRows[0].line, () => required(row.owner_email, 'owner_email'));
     const retainedPath = path.join(retainedDir, `${id}.json`);

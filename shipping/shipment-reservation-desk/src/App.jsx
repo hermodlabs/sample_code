@@ -226,7 +226,19 @@ function QuoteForm({ draft, editQuote, config }) {
               <span className="field-label">Ship point</span>
               <span>{quote.shipPoint}</span>
             </div>
+            <Field label="Quote reference" value={quote.quoteId} onChange={edit('quoteId')} />
+            <Field label="Quote revision" value={quote.quoteRevision} onChange={edit('quoteRevision')} />
+            <Field label="Quote order" value={quote.quoteOrderId} onChange={edit('quoteOrderId')} />
+            <Field label="Quote order revision" value={quote.quoteOrderRevision} onChange={edit('quoteOrderRevision')} />
           </div>
+          <details className="record-details">
+            <summary>Quote validity and booking cutoff</summary>
+            <div className="form-grid">
+              {['quoteKnownAt', 'quoteValidFrom', 'quoteValidUntil', 'bookingCutoff'].map((field, index) =>
+                <Field key={field} label={['Quote known at', 'Quote valid from', 'Quote valid until (exclusive)', 'Carrier booking cutoff'][index]}
+                  type="datetime-local" value={quote[field]} onChange={edit(field)} />)}
+            </div>
+          </details>
         </fieldset>
       </div>
       <div className="panel-footnote">
@@ -336,7 +348,7 @@ function Results({ desk }) {
   const complete = status === REVIEW_STATE.COMPLETE && current?.available;
   const running = status === REVIEW_STATE.RUNNING;
   const dirty = status === REVIEW_STATE.DIRTY;
-  const earlierRun = complete ? desk.previousRun : desk.run;
+  const earlierRun = complete ? desk.previousRun : desk.run ?? desk.previousRun;
   const stateLabel = running ? 'Calculating' : dirty ? 'Needs reassessment'
     : complete ? 'Current result' : 'Not yet reviewed';
   const heading = running ? 'Checking the complete arrangements…'
@@ -353,9 +365,25 @@ function Results({ desk }) {
           <span className={`review-state ${complete ? 'review-state-complete' : ''}`}>{stateLabel}</span>
         </SectionHeading>
         <Issues issues={desk.issues} />
+        <Field label="Recorded reviewer" value={desk.reviewer} onChange={desk.setReviewer}
+          hint="Name the person actually reviewing these records. This field does not authenticate identity." />
+        <p className="section-description">Owner: {desk.inspection?.context.owner ?? config.owner.name}.
+          {current?.preferred?.map(plan => ` ${plan.label}: book by ${formatTime(desk.caseData.tables.arrangements.find(row => row.id === plan.arrangementId).bookingCutoff, config)}.`).join('')}
+        </p>
+        {desk.findingChanges?.available && desk.findingChanges.status === 'changed' && <p className="notice">
+          Since the retained review: {[
+            desk.findingChanges.findings.feasibility.changed && 'available responses changed',
+            desk.findingChanges.findings.preference.changed && 'the preferred response changed',
+            desk.findingChanges.findings.blockers.changed && 'required follow-up changed',
+          ].filter(Boolean).join('; ') || 'the recorded basis changed'}. Review the changed records before handing off a decision.
+        </p>}
         <div className="review-actions">
+          <button className="button button-secondary" onClick={desk.reviewInputs}
+            disabled={running || !desk.draft || !desk.inputsNeedReview}>
+            Accept reviewed input records
+          </button>
           <button className="button button-primary" onClick={desk.evaluate}
-            disabled={running || status === REVIEW_STATE.LOADING || !desk.draft}>
+            disabled={running || status === REVIEW_STATE.LOADING || !desk.draft || desk.inputsNeedReview}>
             <Icon name="arrow" />{running ? 'Reviewing arrangements…' : 'Review arrangements'}
           </button>
           {running && <button className="button button-secondary" onClick={desk.cancel}>Cancel review</button>}
@@ -378,6 +406,121 @@ function Results({ desk }) {
       </p></div>
     </section>
   );
+}
+
+function ReplacementRecord({ desk }) {
+  const [record, setRecord] = useState({ kind: 'reservation', arrangement: 'consolidated', reference: '',
+    orderId: '', orderRevision: '', recipient: '', shipDate: '', profileVersion: '', actor: '',
+    shipPoint: '', start: '', end: '', registered: '' });
+  const edit = field => value => setRecord(current => ({ ...current, [field]: value }));
+  return <details className="panel record-panel"><summary className="supporting-record-toggle">Add a received permission or registration record</summary><div className="panel-content">
+    <SectionHeading number="3" title="Received supporting record" />
+    <p>Record an actual replacement. Its scope and validity come from the received document; requesting it does not satisfy a requirement.</p>
+    <div className="form-grid">
+      <Select label="Record type" value={record.kind} onChange={edit('kind')}>
+        <option value="reservation">Reservation permission</option><option value="release">Final release grant</option>
+        <option value="readiness">Transportation registration</option>
+      </Select>
+      <Select label="Arrangement" value={record.arrangement} onChange={edit('arrangement')}>
+        {desk.draft.quotes.map(quote => <option key={quote.id} value={quote.id}>{desk.config.labels.arrangements[quote.id]}</option>)}
+      </Select>
+      <Field label="Source record reference" value={record.reference} onChange={edit('reference')} />
+      <Field label="Order covered" value={record.orderId} onChange={edit('orderId')} />
+      <Field label="Order revision covered" value={record.orderRevision} onChange={edit('orderRevision')} />
+      <Field label="Ship point covered" value={record.shipPoint} onChange={edit('shipPoint')} />
+      <Field label="Destination covered" value={record.recipient} onChange={edit('recipient')} />
+      <Field label="Shipment date covered" type="date" value={record.shipDate} onChange={edit('shipDate')} />
+      <Field label="Profile version covered" value={record.profileVersion} onChange={edit('profileVersion')} />
+      {record.kind === 'release' && <Field label="Release officer covered" value={record.actor} onChange={edit('actor')} />}
+      {record.kind !== 'readiness' && <>
+        <Field label="Permission valid from" type="datetime-local" value={record.start} onChange={edit('start')} />
+        <Field label="Permission valid until" type="datetime-local" value={record.end} onChange={edit('end')} />
+      </>}
+      {record.kind === 'readiness' && <Select label="Registration recorded" value={record.registered} onChange={edit('registered')}>
+        <option value="">Choose the supplied finding</option><option value="true">Registered</option><option value="false">Not registered</option></Select>}
+    </div>
+    <button className="button button-secondary" onClick={() => desk.addSupportingRecord(record)}>Add received record for review</button>
+  </div></details>;
+}
+
+function OperatingReview({ desk }) {
+  const actor = desk.reviewer;
+  const [optionId, setOptionId] = useState('direct');
+  const [kind, setKind] = useState('reservation');
+  const [reference, setReference] = useState('');
+  const [note, setNote] = useState('');
+  const [eventScope, setEventScope] = useState({ orderId: '', orderRevision: '', arrangement: '',
+    recipient: '', shipDate: '', profileVersion: '', shipPoint: '', source: '', amount: '', authorizedAt: '',
+    reservedAt: '', deliveredAt: '', quoteId: '', quoteRevision: '', quantity: '', bookingReference: '', result: '' });
+  const inspection = desk.inspection;
+  if (!inspection) return null;
+  const operatingStatus = inspection.output.brief.sections.find(row => row.id === 'actual-shipment')?.value;
+  const actionWindows = inspection.output.brief.sections.find(row => row.id === 'next-work')?.value ?? [];
+  return <section className="panel"><div className="panel-content">
+    <SectionHeading title="Decision and operating handoff" />
+    <p>Owner: {inspection.context?.owner ?? desk.config.owner.name}. {desk.config.policy.reason}</p>
+    <details className="record-details"><summary>Response action windows</summary><ul>
+      {actionWindows.map(window => <li key={window.arrangement}>{desk.config.labels.arrangements[window.arrangement]}:
+        {' '}latest modeled selection/preparation start {formatTime(window.dueMinute, desk.config)}; {window.remainingMinutes} minutes remaining.</li>)}
+    </ul><p className="field-hint">{actionWindows[0]?.meaning}</p></details>
+    {desk.current && desk.config.operatingActions.flatMap(action => desk.current.plans
+      .filter(plan => plan.blockers.some(blocker => blocker.id === action.when))
+      .map(plan => ({ action, plan }))).map(({ action, plan }) => <p key={`${action.id}-${plan.id}`}>
+      <strong>{plan.label}: {action.owner}</strong> — {action.action}<br />
+      {action.closesWith} Latest modeled selection/preparation start: {formatTime(actionWindows.find(row => row.arrangement === plan.arrangementId).dueMinute, desk.config)}.
+    </p>)}
+    {desk.current && <button className="button button-secondary" onClick={() => desk.acceptFinding(actor)}>Accept reviewed assessment</button>}
+    {desk.current?.plans.some(plan => plan.feasible) && <>
+      <Select label="Arrangement to hand off" value={optionId} onChange={setOptionId}>
+        {desk.current.plans.filter(plan => plan.feasible).map(plan => <option key={plan.id} value={plan.arrangementId}>{plan.label}</option>)}
+      </Select>
+      <button className="button button-primary" onClick={() => desk.recordDecision(optionId, actor)}>Record chosen response</button>
+    </>}
+    {inspection.decision && <p><strong>Recorded response:</strong> {inspection.decision.optionId ?? inspection.decision.planId}. This records a choice, not a carrier booking.</p>}
+    {inspection.staleDecision && <p role="status">The earlier operating decision needs reassessment because its basis changed.</p>}
+    <details className="record-details"><summary>Record an actual operating event or escalation</summary>
+      <Select label="Event" value={kind} onChange={setKind}>
+        <option value="authorization">External authority received</option><option value="reservation">Carrier reservation received</option>
+        <option value="handoff">Operating handoff recorded</option><option value="delivery">Delivery evidence received</option>
+        <option value="escalation">Escalate the commitment</option>
+      </Select>
+      <Field label="External source reference" value={reference} onChange={setReference} />
+      <Field label="Source of the received document" value={eventScope.source}
+        onChange={value => setEventScope(current => ({ ...current, source: value }))} />
+      <Field label="What the record establishes" value={note} onChange={setNote} />
+      {kind !== 'escalation' && <>
+        <p>Current recorded response: {inspection.decision?.choices?.arrangement ?? 'Choose a current supported response first'}. Enter the event document’s actual scope.</p>
+        {['orderId', 'orderRevision', 'arrangement', 'recipient', 'shipDate', 'profileVersion', 'shipPoint'].map((field,index) => <Field key={field}
+          label={['Event order', 'Event order revision', 'Event arrangement', 'Event destination', 'Event shipment date', 'Event profile version', 'Event ship point'][index]} value={eventScope[field]}
+          onChange={value => setEventScope(current => ({ ...current, [field]: value }))} />)}
+        {['authorization', 'reservation', 'delivery'].includes(kind) && <Select label="Document records a successful result"
+          value={eventScope.result} onChange={value => setEventScope(current => ({ ...current, result: value }))}>
+          <option value="">Choose what the document says</option><option value="true">Yes</option><option value="false">No</option>
+        </Select>}
+        {(kind === 'authorization' ? ['amount', 'authorizedAt', 'validFrom', 'validUntil'] : kind === 'reservation'
+          ? ['quoteId', 'quoteRevision', 'reservedAt'] : kind === 'delivery' ? ['quantity', 'bookingReference', 'deliveredAt'] : []).map(field => <Field
+          key={field} label={{ amount: 'Authorized amount (USD)', authorizedAt: 'Actual authorization time', quoteId: 'Booked quote reference',
+            validFrom: 'Authority valid from', validUntil: 'Authority valid until (exclusive)',
+            quoteRevision: 'Booked quote revision', reservedAt: 'Actual carrier reservation time', quantity: 'Actual received quantity',
+            bookingReference: 'Carrier reservation reference', deliveredAt: 'Actual accepted delivery time' }[field]}
+          type={field.endsWith('At') || ['validFrom','validUntil'].includes(field) ? 'datetime-local' : 'text'} value={eventScope[field]}
+          onChange={value => setEventScope(current => ({ ...current, [field]: value }))} />)}
+      </>}
+      <button className="button button-secondary" onClick={() => desk.recordOperation(kind, { reference, note, ...eventScope }, actor)}>Record received event</button>
+    </details>
+    {inspection.operations?.length > 0 && <ul>{inspection.operations.map((event,index) =>
+      <li key={index}>{event.kind}: {event.record?.reference ?? event.reference} — {event.record?.note ?? event.note}</li>)}</ul>}
+    {operatingStatus && desk.status === REVIEW_STATE.COMPLETE && <table><caption>Authored operating checks</caption><tbody>
+      <tr><th scope="row">Current sourced authorization</th><td>{operatingStatus.authorizationRecorded ? 'Recorded support passes' : 'Not established'}</td></tr>
+      <tr><th scope="row">Current sourced carrier reservation</th><td>{operatingStatus.reservationRecorded ? 'Recorded support passes' : 'Not established'}</td></tr>
+      <tr><th scope="row">Original delivery commitment completed</th><td>{operatingStatus.originalCommitmentCompleted ? 'Recorded support passes' : 'Not established'}</td></tr>
+      {operatingStatus.promiseRevised && <tr><th scope="row">Delivery under revised terms</th><td>{operatingStatus.currentCommitmentCompleted ? 'Recorded support passes; original promise remains separate' : 'Not established'}</td></tr>}
+      <tr><th scope="row">Escalation recorded</th><td>{operatingStatus.escalationRecorded ? 'Recorded' : 'None recorded'}</td></tr>
+    </tbody></table>}
+    <p className="field-hint">Recorded assertions do not authenticate authority. A reservation is not delivery, and a revised customer promise is not fulfillment of the original promise.</p>
+    <button className="button button-secondary" onClick={desk.downloadJourney}>Download continuation</button>
+    <button className="button button-secondary" onClick={desk.saveJourney}>Save this review locally</button>
+  </div></section>;
 }
 
 export default function App() {
@@ -484,6 +627,11 @@ export default function App() {
         ) : desk.caseData && desk.draft ? (
           <>
             <ShipmentBasis caseData={desk.caseData} config={desk.config} />
+            <section className="panel"><div className="panel-content form-grid">
+              <Field label="Assessment as of" type="datetime-local" value={desk.draft.asOf} onChange={desk.editAsOf}
+                hint="Advance this time to reassess an unchanged quote or permission. Artifact creation time does not advance the case." />
+              <button className="button button-secondary" onClick={desk.restoreJourney}>Restore saved review</button>
+            </div></section>
             <div className="desk-layout">
               <div className="input-column">
                 <QuoteForm
@@ -493,6 +641,7 @@ export default function App() {
                   config={desk.config}
                 />
                 <ConfirmationForm draft={desk.draft} editConfirmation={desk.editConfirmation} />
+                <ReplacementRecord desk={desk} />
                 <div className="input-footer">
                   <button
                     className="text-button"
@@ -503,11 +652,11 @@ export default function App() {
                   </button>
                   <span>
                     Complete resources and permission records remain in the imported
-                    case. “As of” is the recorded review time; import a fresh case to advance it.
+                    case. Imported and edited records require explicit review before evaluation.
                   </span>
                 </div>
               </div>
-              <Results desk={desk} />
+              <div className="review-column"><Results desk={desk} /><OperatingReview desk={desk} /></div>
             </div>
           </>
         ) : (

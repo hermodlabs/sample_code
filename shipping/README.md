@@ -1,33 +1,25 @@
 # Shipping samples
 
-Two standalone integrations use the same pinned consolidated-shipment app:
-one reviews company exports in batches, and the other gives a coordinator a
-focused interface for reviewing an individual shipment. Both evaluate complete
-arrangements against the recorded requirements and preserve the supporting scope.
+Two standalone clients continue the same shipment exception review:
 
-| Step | Project | Run from the repository root |
+| Step | Client | Run from repository root |
 | --- | --- | --- |
-| Review shipment exports | [Shipment exceptions](shipment-exceptions/README.md), a Node.js application using the public CLI | `npm run demo:shipment:cli` |
-| Review one shipment | [Shipment Reservation Desk](shipment-reservation-desk/README.md), a React application using the public SDK | `npm run dev:shipment:react` |
+| Identify changed or closing commitments | [Shipment exception queue](shipment-exceptions/README.md), public CLI | `npm run demo:shipment:cli` |
+| Resolve one intervention and retain the handoff | [Shipment Reservation Desk](shipment-reservation-desk/README.md), public SDK | `npm run dev:shipment:react` |
 
-The CLI importer combines order, quote and confirmation snapshots with explicitly
-retained case records. It compares the assessed results with an earlier batch
-and produces readable HTML/CSV reports. The React desk lets a coordinator update
-quotes and scoped confirmations, reassess the same rules, and inspect blockers.
-Both include the same fictional outcomes for current records, an old slot
-confirmation and old permissions.
+The CLI writes a native `review.json` for each calculated shipment. Import that
+file in the desk to keep its exact case, app/workflow versions, prior findings,
+owner and source basis. Imported facts await explicit review. After reviewing a
+finding, record a chosen response and actual operating records separately.
 
-To continue from a batch result, open the CLI's HTML report and locate the
-shipment's `case.json` under the output's `shipments/` directory. Use **Import
-case** in the React desk, update only the records the team has actually received,
-and choose **Review arrangements**. The desk's **Case inputs** download can also
-be supplied to the public CLI. The transferred file contains recorded inputs;
-it does not convey an approval or reserve freight.
+Download the continuation to return it to `continue-review.mjs`. The same native
+workflow history passes between clients; a new case is not silently substituted.
+Saving or exporting preserves edited inputs as awaiting review rather than
+accepting them. The SDK retains complete outputs while the clients present the
+few findings needed for the next decision.
 
-Run `npm run test:cli-apps` for the CLI tests,
-`npm run test:shipment:react` for SDK/form tests, and
-`npm run test:shipment:react:browser` for production-browser checks and CLI
-agreement. Each project README documents copying and running that project
-independently with the public package archives.
-
-See [all sample domains](../README.md).
+Both clients use the new cost-first app and source-aware operating workflow.
+Authored quote validity and individual booking cutoffs make time consequential.
+A reservation does not prove delivery; an escalation or revised customer promise
+does not satisfy the original promise. All records are fictional and no external
+business operation is performed.

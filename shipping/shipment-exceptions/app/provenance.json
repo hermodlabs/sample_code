@@ -1,7 +1,9 @@
 {
-  "description": "Unmodified canonical app package from the consolidated-freight shipment walkthrough. All sample inputs are fictional.",
-  "source": "website_beta/assets/use-cases/shipment-readiness/consolidation/shipment-consolidation.app.json",
+  "description": "New cost-first shipment exception profile authored through the public SDK from the retained commitment template.",
+  "source": "examples/shipping/clients/shipment.model.json",
   "file": "shipment-review.app.json",
-  "sha256": "409dc299e6cde8abd54e942517471f6871e66ff7f4f7c7336f9b19ab1436b19e",
-  "note": "The adapter pins this package rather than rebuilding the shipment rules. Hashes identify local artifacts; they are not a publisher signature or operating approval."
+  "sha256": "03e1357e59893f4c6171db069433fe073724658506ccacb95c49dea2646867ef",
+  "previous": "archive/shipment-consolidation-release-1.app.json",
+  "moduleHash": "52375c5f2a6131700224039025dbb3b575627cf81456c896104e1f6bf999e06c",
+  "note": "The arrival-first release remains unchanged in archive. No marketplace release was overwritten. All records are fictional."
 }
