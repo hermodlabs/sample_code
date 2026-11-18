@@ -3,15 +3,16 @@ import { lstat, mkdir, mkdtemp, readFile, realpath, rename, rm, rmdir, writeFile
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
-import { runCLI } from '@decision-lab/cli';
+import { CLI_EXIT_CODE, runCLI } from '@decision-lab/cli';
 import { readTimingPolicy, summarizeRun } from './gifting.js';
 import { renderHTML } from './report.mjs';
+import { PREFLIGHT_STATUS } from './preflightStatus.js';
 
 const defaultConfig = fileURLToPath(new URL('../data/config.json', import.meta.url));
 const json = value => `${JSON.stringify(value, null, 2)}\n`;
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const inside = (child, parent) => child === parent || child.startsWith(`${parent}${path.sep}`);
-const fail = (message, exitCode = 2) => Object.assign(new Error(message), { exitCode });
+const fail = (message, exitCode = CLI_EXIT_CODE.INVALID_INPUT) => Object.assign(new Error(message), { exitCode });
 
 // Unlike shell commands, runCLI accepts literal arguments. A campaign ID or
 // path cannot become executable shell text. This is the public CLI handler,
@@ -137,14 +138,14 @@ export async function runPreflight({ inputFile, outputDir, configFile = defaultC
   try {
     const opened = await invoke(['app', 'open', appFile, '--output', path.join(stage, 'app.json')], commands);
     const app = await optionalJSON(path.join(stage, 'app.json'));
-    if (opened.exitCode || !app) throw fail(`The CLI rejected the configured app: ${messages(opened).join('; ')}`);
+    if (opened.exitCode !== CLI_EXIT_CODE.COMPLETED || !app) throw fail(`The CLI rejected the configured app: ${messages(opened).join('; ')}`);
     const expected = config.binding;
     if (app.app?.id !== expected.appId || app.app?.version !== expected.release || app.app?.contentHash !== expected.appHash || app.contentHash !== expected.packageHash) {
       throw fail('The app does not match the configured release and content hashes.');
     }
     const policy = readTimingPolicy(app);
     for (const campaign of source.campaigns) {
-      const row = { id: campaign.id, owner: campaign.owner, status: 'input-error', messages: [], case: null, validation: null, run: null, review: null };
+      const row = { id: campaign.id, owner: campaign.owner, status: PREFLIGHT_STATUS.INPUT_ERROR, messages: [], case: null, validation: null, run: null, review: null };
       campaigns.push(row);
       const directory = path.join(stage, 'campaigns', campaign.id);
       await mkdir(directory, { recursive: true });
@@ -172,9 +173,10 @@ export async function runPreflight({ inputFile, outputDir, configFile = defaultC
       const validated = await invoke(['case', 'validate', '--app', appFile, '--case', caseFile, '--output', validationFile], commands);
       const validation = await optionalJSON(validationFile);
       if (validation) row.validation = `campaigns/${campaign.id}/validation.json`;
-      if (validated.exitCode || validation?.valid !== true) {
-        row.status = validated.exitCode === 4 ? 'unavailable' : 'input-error';
-        row.failureCode = validated.exitCode === 4 ? 4 : 2;
+      if (validated.exitCode !== CLI_EXIT_CODE.COMPLETED || validation?.valid !== true) {
+        row.status = validated.exitCode === CLI_EXIT_CODE.OPERATIONAL_ERROR ? PREFLIGHT_STATUS.UNAVAILABLE : PREFLIGHT_STATUS.INPUT_ERROR;
+        row.failureCode = validated.exitCode === CLI_EXIT_CODE.OPERATIONAL_ERROR
+          ? CLI_EXIT_CODE.OPERATIONAL_ERROR : CLI_EXIT_CODE.INVALID_INPUT;
         row.messages = messages(validated, validation);
         continue;
       }
@@ -196,9 +198,10 @@ export async function runPreflight({ inputFile, outputDir, configFile = defaultC
       // Exit zero can mean a completed assessment with no feasible package.
       // Conversely, a partial search must not become a recommendation simply
       // because it happened to retain one attractive candidate.
-      if (evaluated.exitCode || !row.review?.available) {
-        row.status = evaluated.exitCode === 2 ? 'input-error' : 'unavailable';
-        row.failureCode = evaluated.exitCode === 4 ? 4 : evaluated.exitCode === 2 ? 2 : 3;
+      if (evaluated.exitCode !== CLI_EXIT_CODE.COMPLETED || !row.review?.available) {
+        row.status = evaluated.exitCode === CLI_EXIT_CODE.INVALID_INPUT ? PREFLIGHT_STATUS.INPUT_ERROR : PREFLIGHT_STATUS.UNAVAILABLE;
+        row.failureCode = evaluated.exitCode === CLI_EXIT_CODE.OPERATIONAL_ERROR ? CLI_EXIT_CODE.OPERATIONAL_ERROR
+          : evaluated.exitCode === CLI_EXIT_CODE.INVALID_INPUT ? CLI_EXIT_CODE.INVALID_INPUT : CLI_EXIT_CODE.UNAVAILABLE;
         row.messages.push(...(row.review?.issues?.length ? row.review.issues : messages(evaluated)));
       } else {
         row.status = row.review.status;
@@ -209,9 +212,9 @@ export async function runPreflight({ inputFile, outputDir, configFile = defaultC
     for (const [file, hash] of sources) {
       if (digest(await readFile(file)) !== hash) throw fail(`Source changed during preflight: ${file}`);
     }
-    const exitCode = campaigns.some(row => row.failureCode === 4) ? 4
-      : campaigns.some(row => row.status === 'unavailable') ? 3
-        : campaigns.some(row => row.status === 'input-error') ? 2 : 0;
+    const exitCode = campaigns.some(row => row.failureCode === CLI_EXIT_CODE.OPERATIONAL_ERROR) ? CLI_EXIT_CODE.OPERATIONAL_ERROR
+      : campaigns.some(row => row.status === PREFLIGHT_STATUS.UNAVAILABLE) ? CLI_EXIT_CODE.UNAVAILABLE
+        : campaigns.some(row => row.status === PREFLIGHT_STATUS.INPUT_ERROR) ? CLI_EXIT_CODE.INVALID_INPUT : CLI_EXIT_CODE.COMPLETED;
     const manifest = {
       format: 'gift-kit-preflight/1', createdAt: new Date().toISOString(),
       reviewState: 'calculated-awaiting-review', binding: config.binding,

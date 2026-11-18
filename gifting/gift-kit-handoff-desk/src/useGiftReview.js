@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createDecisionLab } from '@decision-lab/sdk';
 import { createBrowserExecutor } from '@decision-lab/sdk/browser';
 import { buildCase, readTimingPolicy, summarizeRun, toDraft } from './gifting.js';
+import { REVIEW_STATE } from './reviewState.js';
 
 const configURL = new URL(`${import.meta.env.BASE_URL}data/config.json`, document.baseURI);
 
@@ -32,7 +33,7 @@ export default function useGiftReview() {
   const [selectedCaseId, setSelectedCaseId] = useState('');
   const [caseData, setCaseData] = useState(null);
   const [draft, setDraft] = useState(null);
-  const [status, setStatus] = useState('loading');
+  const [status, setStatus] = useState(REVIEW_STATE.LOADING);
   const [issues, setIssues] = useState([]);
   const [run, setRun] = useState(null);
   const [previousRun, setPreviousRun] = useState(null);
@@ -75,11 +76,11 @@ export default function useGiftReview() {
         setCaseData(snapshot.inputs);
         setDraft(form);
         setSelectedCaseId(entry.id);
-        setStatus('ready');
+        setStatus(REVIEW_STATE.READY);
       } catch (error) {
         if (token === requestId.current) {
           setIssues(explain(error));
-          setStatus('invalid');
+          setStatus(REVIEW_STATE.INVALID);
         }
       }
     }
@@ -111,14 +112,14 @@ export default function useGiftReview() {
     setSelectedCaseId(id);
     setRun(null);
     setPreviousRun(null);
-    setStatus('ready');
+    setStatus(REVIEW_STATE.READY);
   }
 
   async function selectCase(id) {
     const token = interrupt();
     const controller = new AbortController();
     activeRequest.current = controller;
-    setStatus('loading');
+    setStatus(REVIEW_STATE.LOADING);
     setIssues([]);
     try {
       const entry = config.cases.find(item => item.id === id);
@@ -127,14 +128,14 @@ export default function useGiftReview() {
     } catch (error) {
       if (token === requestId.current) {
         setIssues(explain(error));
-        setStatus('invalid');
+        setStatus(REVIEW_STATE.INVALID);
       }
     }
   }
 
   function edited() {
     interrupt();
-    setStatus('dirty');
+    setStatus(REVIEW_STATE.DIRTY);
     setIssues([]);
   }
 
@@ -170,7 +171,7 @@ export default function useGiftReview() {
     const token = interrupt();
     const controller = new AbortController();
     activeRequest.current = controller;
-    setStatus('running');
+    setStatus(REVIEW_STATE.RUNNING);
     setIssues([]);
     try {
       const lab = labRef.current;
@@ -179,7 +180,7 @@ export default function useGiftReview() {
       const validation = lab.cases.validate({ app, case: snapshot });
       if (!validation.valid) {
         setIssues(validation.issues);
-        setStatus('invalid');
+        setStatus(REVIEW_STATE.INVALID);
         return;
       }
       const result = await lab.run({
@@ -195,37 +196,37 @@ export default function useGiftReview() {
       const summary = summarizeRun(result, config);
       if (!summary.available) {
         setIssues(summary.issues.map(message => typeof message === 'string' ? { message } : message));
-        setStatus('unavailable');
+        setStatus(REVIEW_STATE.UNAVAILABLE);
         return;
       }
       setPreviousRun(run);
       setRun(result);
-      setStatus('complete');
+      setStatus(REVIEW_STATE.COMPLETE);
     } catch (error) {
       if (token === requestId.current) {
         setIssues(explain(error));
-        setStatus(error.name === 'FormError' || error.issues ? 'invalid' : 'unavailable');
+        setStatus(error.name === 'FormError' || error.issues ? REVIEW_STATE.INVALID : REVIEW_STATE.UNAVAILABLE);
       }
     }
   }
 
   function cancel() {
     interrupt();
-    setStatus('dirty');
+    setStatus(REVIEW_STATE.DIRTY);
     setIssues([{ message: 'Review cancelled. Review the current records before using a recommendation.' }]);
   }
 
   function importCaseText(text) {
     interrupt();
     setIssues([]);
-    setStatus('dirty');
+    setStatus(REVIEW_STATE.DIRTY);
     try {
       // Native raw inputs and pinned SDK case artifacts use the same admission
       // path. No restoration of archived runs or custom review bundles.
       installCase(labRef.current.sources.parseArtifact(text), '');
     } catch (error) {
       setIssues(explain(error));
-      setStatus('invalid');
+      setStatus(REVIEW_STATE.INVALID);
     }
   }
 
@@ -248,13 +249,13 @@ export default function useGiftReview() {
 
   return {
     config, policy, cases: config?.cases ?? [], selectedCaseId, caseData, draft, status, issues,
-    current: status === 'complete' ? summary : null,
-    before: status === 'complete' ? earlier : summary,
+    current: status === REVIEW_STATE.COMPLETE ? summary : null,
+    before: status === REVIEW_STATE.COMPLETE ? earlier : summary,
     run, previousRun,
     selectCase, editQuote, editConfirmation, editSetup, editAvailability,
     evaluate, cancel, importCaseText, downloadCase,
     downloadRun() {
-      if (status === 'complete') download(`${caseData.id}-run.json`, run, labRef.current);
+      if (status === REVIEW_STATE.COMPLETE) download(`${caseData.id}-run.json`, run, labRef.current);
     },
   };
 }

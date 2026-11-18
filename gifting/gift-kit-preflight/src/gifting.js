@@ -1,4 +1,21 @@
-import { commitment } from '@decision-lab/sdk';
+import { commitment, EXECUTION_STATUS, inspectReportCompleteness } from '@decision-lab/sdk';
+
+// These are this desk's projected outcomes, not SDK execution statuses.
+// A usable assessment can be BLOCKED: it established that no package fits.
+export const REVIEW_OUTCOME = Object.freeze(/** @type {const} */ ({
+  ELIGIBLE: 'eligible',
+  BLOCKED: 'blocked',
+  UNAVAILABLE: 'unavailable',
+}));
+/** @typedef {(typeof REVIEW_OUTCOME)[keyof typeof REVIEW_OUTCOME]} ReviewOutcome */
+
+// Missing evidence and an explicitly negative record must remain distinct.
+export const BOOKING_CONFIRMATION = Object.freeze(/** @type {const} */ ({
+  NONE: 'none',
+  POSITIVE: 'positive',
+  NEGATIVE: 'negative',
+}));
+/** @typedef {(typeof BOOKING_CONFIRMATION)[keyof typeof BOOKING_CONFIRMATION]} BookingConfirmation */
 
 const scopeFields = [
   'batchId', 'insertRevision', 'destinationRevision', 'checkoutRevision',
@@ -127,7 +144,9 @@ export function toDraft(inputs, config) {
     throw new Error('The confirmation must explicitly state whether the package is confirmed.');
   }
   const confirmation = {
-    status: record ? (record.confirmed ? 'positive' : 'negative') : 'none',
+    status: record
+      ? (record.confirmed ? BOOKING_CONFIRMATION.POSITIVE : BOOKING_CONFIRMATION.NEGATIVE)
+      : BOOKING_CONFIRMATION.NONE,
   };
   for (const field of recordFields) confirmation[field] = record?.[field] ?? '';
   // Only the package being booked is known from the form's fixed context.
@@ -220,12 +239,12 @@ export function buildCase(base, draft, config) {
   });
 
   const row = draft.confirmation ?? {};
-  if (!['none', 'positive', 'negative'].includes(row.status)) {
+  if (!Object.values(BOOKING_CONFIRMATION).includes(row.status)) {
     issues.push({ path: 'confirmation.status', message: 'Select a supported current record status.' });
   }
   result.tables.confirmations = [];
-  if (row.status === 'positive' || row.status === 'negative') {
-    const confirmation = { ...base.tables.confirmations[0], confirmed: row.status === 'positive' };
+  if (row.status === BOOKING_CONFIRMATION.POSITIVE || row.status === BOOKING_CONFIRMATION.NEGATIVE) {
+    const confirmation = { ...base.tables.confirmations[0], confirmed: row.status === BOOKING_CONFIRMATION.POSITIVE };
     for (const field of recordFields) {
       confirmation[field] = read(`confirmation.${field}`, row[field]);
     }
@@ -252,15 +271,14 @@ export function summarizeRun(run, config) {
   } : null;
   function unavailable(message) {
     return {
-      available: false, status: 'unavailable', issues: [message],
+      available: false, status: REVIEW_OUTCOME.UNAVAILABLE, issues: [message],
       identity: run?.identity, finding: run?.assessment?.finding,
       preferredIds: [], preferred: [], plans: [], scenarioCount: 0, timing,
     };
   }
-  const completeness = run?.report?.completeness;
-  if (run?.execution?.status !== 'completed' || completeness?.materialized !== true
-    || completeness.allRequestedViews !== true || completeness.allRetainedContexts !== true
-    || completeness.truncated !== false || completeness.assessmentComplete !== true) {
+  // Report availability and computation completion are separate contracts.
+  if (run?.execution?.status !== EXECUTION_STATUS.COMPLETED
+    || !inspectReportCompleteness(run?.report).complete) {
     return unavailable('The calculation or its report is incomplete. Review again before proposing a package.');
   }
   if (Object.entries(config.binding).some(([key, value]) => run.identity?.[key] !== value)) {
@@ -276,7 +294,7 @@ export function summarizeRun(run, config) {
   let assessment;
   try { assessment = commitment.resolveCommitmentAssessment(run.assessment, run.report); }
   catch { return unavailable('The complete package assessment is unavailable in this result.'); }
-  if (assessment.status !== 'complete' || assessment.coverage.complete !== true
+  if (assessment.status !== commitment.COMMITMENT_ASSESSMENT_STATUS.COMPLETE || assessment.coverage.complete !== true
     || assessment.coverage.admissionComplete !== true) {
     return unavailable('The calculation has not checked every admitted package and fault scenario.');
   }
@@ -313,7 +331,7 @@ export function summarizeRun(run, config) {
   const preferred = plans.filter(plan => plan.preferred);
   return {
     available: true,
-    status: assessment.feasiblePlanIds.length ? 'eligible' : 'blocked',
+    status: assessment.feasiblePlanIds.length ? REVIEW_OUTCOME.ELIGIBLE : REVIEW_OUTCOME.BLOCKED,
     issues: [], identity: run.identity, finding: assessment.finding,
     preferredIds: preferred.map(plan => plan.packageId), preferred, plans,
     scenarioCount: assessment.coverage.totalScenarios,

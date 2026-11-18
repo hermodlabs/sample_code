@@ -213,3 +213,13 @@ test('the human report escapes source text and retains canonical download links'
   assert.doesNotMatch(links, /href="javascript:|href="\.\.\//);
   assert.match(links, /href="sources\/a%22b%23c.json"/);
 });
+
+test('an unrecognized queue status withholds ordinary proposal guidance', () => {
+  const manifest = structuredClone(result.manifest);
+  manifest.campaigns = [{ ...manifest.campaigns[0], status: 'future-status' }];
+  const html = renderHTML(manifest);
+  assert.match(html, /Unknown assessment status/);
+  assert.match(html, /Resolve the assessment problem, then run it again/);
+  assert.doesNotMatch(html, /Review the proposed package and obtain/);
+  assert.doesNotMatch(html, /data-record-view="gift-kit-GIFT-120-packages"/);
+});

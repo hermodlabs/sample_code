@@ -227,6 +227,15 @@ projections are shown as unavailable rather than summarized optimistically.
 
 ## Reading the report
 
+[`src/semantics.mjs`](src/semantics.mjs) names the sample's separate vocabularies:
+`REVIEW_OUTCOME` describes an available eligible or blocked finding, while
+`BATCH_STATUS` describes the comparison with an earlier review. Neither is an
+SDK execution status. `SLOT_CONFIRMATION_STATUS` names source-record states;
+no CSV row means no confirmation record. The frozen maps and JSDoc types retain
+the existing serialized strings. [`src/classify.mjs`](src/classify.mjs) keeps the
+comparison order explicit, preserves preferred ties, and treats an unrecognized
+comparison status as requiring reassessment.
+
 The worked inputs cover four outcomes:
 
 | Shipment / morning input | Report meaning |

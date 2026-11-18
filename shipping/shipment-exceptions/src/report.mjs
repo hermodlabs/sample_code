@@ -1,6 +1,8 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { RecordsView } from '@decision-lab/react-views';
+import { commitment, EXECUTION_STATUS, inspectReportCompleteness } from '@decision-lab/sdk';
+import { BATCH_STATUS, REVIEW_OUTCOME } from './semantics.mjs';
 
 /**
  * Present the CLI's retained report in a logistics team's exception list.
@@ -83,24 +85,22 @@ function money(value, options) {
  */
 export function projectRun(run, options = {}) {
   const unavailable = message => ({
-    status: 'unavailable', available: false, issues: [message], identity: run?.identity ?? null,
+    status: REVIEW_OUTCOME.UNAVAILABLE, available: false, issues: [message], identity: run?.identity ?? null,
     scope: null, finding: run?.assessment?.finding ?? null, preferredIds: [], preferredPlanIds: [],
     preferred: [], plans: [], blockers: [],
   });
   try {
     assert(run?.format === 'decision-lab-run/1', 'The file is not a supported Decision Lab run.');
-    assert(run.execution?.status === 'completed', `The assessment did not complete (${text(run.execution?.status) || 'unknown execution status'}).`);
+    assert(run.execution?.status === EXECUTION_STATUS.COMPLETED, `The assessment did not complete (${text(run.execution?.status) || 'unknown execution status'}).`);
     const report = run.report;
     assert(report?.format === 'decision-lab-report/1', 'The run has no complete retained report.');
     const completeness = report.completeness;
-    assert(completeness?.materialized === true && completeness.allRequestedViews === true
-      && completeness.allRetainedContexts === true && completeness.truncated === false
-      && completeness.assessmentComplete === true, 'The retained report is incomplete or truncated.');
+    assert(inspectReportCompleteness(report).complete, 'The retained report is incomplete or truncated.');
     const dataset = report.datasets?.commitment;
     assert(plain(dataset), 'The run has no commitment report dataset.');
     const assessment = dataset.assessment;
     assert(assessment?.format === 'complete-a-commitment.assessment-normalized/1'
-      && assessment.pattern === 'complete-a-commitment/1' && assessment.status === 'complete',
+      && assessment.pattern === commitment.COMMITMENT_MODEL_FORMAT && assessment.status === commitment.COMMITMENT_ASSESSMENT_STATUS.COMPLETE,
     'The commitment assessment is unavailable, invalid, or incomplete.');
     assert(run.assessment?.format === 'complete-a-commitment.assessment-reference/1'
       && run.assessment.datasetId === 'commitment'
@@ -108,12 +108,12 @@ export function projectRun(run, options = {}) {
       && run.assessment.status === assessment.status && run.assessment.finding === assessment.finding
       && same(run.assessment.coverage, assessment.coverage) && same(run.assessment.basis, assessment.basis),
     'The run and report do not retain the same assessment basis.');
-    assert(['feasible_witness', 'no_feasible_plan'].includes(assessment.finding), 'The assessment does not establish a shipment finding.');
+    assert([commitment.COMMITMENT_FINDING.FEASIBLE_WITNESS, commitment.COMMITMENT_FINDING.NO_FEASIBLE_PLAN].includes(assessment.finding), 'The assessment does not establish a shipment finding.');
 
     // A valid JSON object can still pair a report with the wrong run or inputs.
     // Check the identities supplied by the CLI before drawing conclusions.
     const identity = run.identity;
-    assert(plain(identity) && identity.pattern === 'complete-a-commitment/1', 'The run belongs to a different reasoning pattern.');
+    assert(plain(identity) && identity.pattern === commitment.COMMITMENT_MODEL_FORMAT, 'The run belongs to a different reasoning pattern.');
     for (const key of ['runId', 'appId', 'release', 'appHash', 'packageHash', 'pattern', 'moduleHash', 'inputHash', 'modelHash']) {
       assert(identity[key] !== undefined && report.identity?.[key] === identity[key], `The report and run differ at ${key}.`);
     }
@@ -131,7 +131,7 @@ export function projectRun(run, options = {}) {
       }
     }
     assert(same(run.input?.inputs, report.evaluatedInput?.inputs), 'The retained case inputs differ from the reported inputs.');
-    assert(report.evaluatedInput?.model?.format === 'complete-a-commitment/1'
+    assert(report.evaluatedInput?.model?.format === commitment.COMMITMENT_MODEL_FORMAT
       && same(report.evaluatedInput.model.case, report.evaluatedInput.inputs), 'The evaluated model and case inputs differ.');
 
     const coverage = assessment.coverage;
@@ -215,7 +215,7 @@ export function projectRun(run, options = {}) {
     });
     assert(unique(plans.map(plan => plan.arrangementId)), 'Several complete plans use the same arrangement; this adapter expects one plan per arrangement.');
     const feasible = plans.filter(plan => plan.feasible);
-    assert((assessment.finding === 'feasible_witness') === (feasible.length > 0), 'The summary finding disagrees with the retained alternatives.');
+    assert((assessment.finding === commitment.COMMITMENT_FINDING.FEASIBLE_WITNESS) === (feasible.length > 0), 'The summary finding disagrees with the retained alternatives.');
     assert(dataset.summary?.finding === assessment.finding, 'The report summary has a different finding.');
     const recommendation = dataset.summary?.recommendation;
     let preferredPlanIds = [];
@@ -235,7 +235,7 @@ export function projectRun(run, options = {}) {
     const preferred = plans.filter(plan => plan.preferred);
     const parameters = report.evaluatedInput.inputs.parameters;
     return {
-      status: feasible.length ? 'eligible' : 'blocked', available: true, issues: [], identity: { ...identity },
+      status: feasible.length ? REVIEW_OUTCOME.ELIGIBLE : REVIEW_OUTCOME.BLOCKED, available: true, issues: [], identity: { ...identity },
       scope: { orderId: parameters.orderId, orderRevision: parameters.orderRevision, recipient: parameters.recipient,
         shipDate: parameters.shipDate, profileVersion: parameters.profileVersion },
       finding: assessment.finding, preferredIds: preferred.map(plan => plan.arrangementId), preferredPlanIds,
@@ -276,9 +276,13 @@ function messages(row) {
   return [...new Set([...diagnostics, ...array(row.current?.issues), ...blockers])];
 }
 const statusNames = {
-  'input-error': 'Input correction required', unavailable: 'Assessment unavailable', blocked: 'No arrangement passes',
-  unchanged: 'Recommendation unchanged', 'recommendation-changed': 'Recommendation changed',
-  'conditions-changed': 'Conditions changed', new: 'First usable assessment',
+  [BATCH_STATUS.INPUT_ERROR]: 'Input correction required',
+  [BATCH_STATUS.UNAVAILABLE]: 'Assessment unavailable',
+  [BATCH_STATUS.BLOCKED]: 'No arrangement passes',
+  [BATCH_STATUS.UNCHANGED]: 'Recommendation unchanged',
+  [BATCH_STATUS.RECOMMENDATION_CHANGED]: 'Recommendation changed',
+  [BATCH_STATUS.CONDITIONS_CHANGED]: 'Conditions changed',
+  [BATCH_STATUS.NEW]: 'First usable assessment',
 };
 
 function deadlineText(value, options) {

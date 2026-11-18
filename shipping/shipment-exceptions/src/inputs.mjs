@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { parseCsv } from './csv.mjs';
+import { SLOT_CONFIRMATION_STATUS } from './semantics.mjs';
 
 // These are complete snapshots, not patches or event logs. Absence from a
 // snapshot must not silently leave yesterday's quote or slot in the new case.
@@ -134,7 +135,7 @@ function quote(row, order, timeOrigin, expectedCurrency) {
 
 function slot(row, timeOrigin) {
   const status = required(row.status, 'status');
-  if (!['confirmed', 'cancelled', 'conflicting'].includes(status)) throw new InputError('status must be confirmed, cancelled, or conflicting. Resolve an ambiguous current-status export before evaluating it.');
+  if (!Object.values(SLOT_CONFIRMATION_STATUS).includes(status)) throw new InputError('status must be confirmed, cancelled, or conflicting. Resolve an ambiguous current-status export before evaluating it.');
   return {
     arrangement: required(row.arrangement, 'arrangement'), shipPoint: required(row.ship_point, 'ship_point'),
     ...scope(row), slotReference: required(row.slot_reference, 'slot_reference'), status,

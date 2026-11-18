@@ -228,6 +228,12 @@ example has the same helper and pinned data, so the two displays use the same
 SDK-supported findings. Its form-conversion exports are unused by this batch
 runner; they support the companion interactive step.
 
+The helper's `REVIEW_OUTCOME` names the projected business outcomes;
+`PREFLIGHT_STATUS` adds the queue's input-error case. They retain the existing
+manifest strings. An available assessment can be `BLOCKED`, because a complete
+calculation can establish that no package fits. `BOOKING_CONFIRMATION` keeps
+missing and explicitly negative evidence distinct when the case is edited.
+
 [`src/report.mjs`](src/report.mjs) renders a standalone HTML document using
 `RecordsView` from `@decision-lab/react-views` for the campaign queue and package
 comparison tables. React DOM renders them to static HTML; no browser JavaScript

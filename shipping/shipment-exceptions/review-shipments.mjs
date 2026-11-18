@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { CLI_EXIT_CODE } from '@decision-lab/cli';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { runBatch, batchErrorCode } from './src/batch.mjs';
@@ -15,7 +16,7 @@ Exit: 0 complete (including blocked), 2 input errors, 3 unavailable, 4 operation
 `;
 
 export async function main(args = process.argv.slice(2)) {
-  if (args.length === 1 && args[0] === '--help') { process.stdout.write(usage); return 0; }
+  if (args.length === 1 && args[0] === '--help') { process.stdout.write(usage); return CLI_EXIT_CODE.COMPLETED; }
   const names = { '--input': 'inputDir', '--retained': 'retainedDir', '--output': 'outputDir',
     '--previous': 'previousFile', '--config': 'configFile', '--created-at': 'createdAt',
     '--timeout-ms': 'timeoutMs', '--max-plans': 'maxPlans' };
@@ -24,10 +25,10 @@ export async function main(args = process.argv.slice(2)) {
     for (let index = 0; index < args.length; index += 2) {
       const key = names[args[index]], value = args[index + 1];
       if (!key || value === undefined || value.startsWith('--') || Object.hasOwn(options, key)) {
-        throw Object.assign(new Error(`Unknown, duplicate, or incomplete argument: ${args[index]}. Use --help.`), { exitCode: 2 });
+        throw Object.assign(new Error(`Unknown, duplicate, or incomplete argument: ${args[index]}. Use --help.`), { exitCode: CLI_EXIT_CODE.INVALID_INPUT });
       }
       if (key === 'maxPlans' || key === 'timeoutMs') {
-        if (!/^(0|[1-9]\d*)$/.test(value)) throw Object.assign(new Error(`${args[index]} must be a whole number.`), { exitCode: 2 });
+        if (!/^(0|[1-9]\d*)$/.test(value)) throw Object.assign(new Error(`${args[index]} must be a whole number.`), { exitCode: CLI_EXIT_CODE.INVALID_INPUT });
         options[key] = Number(value);
       } else options[key] = value;
     }

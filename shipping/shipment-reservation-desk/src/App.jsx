@@ -2,6 +2,7 @@ import React, { useId, useRef, useState } from 'react';
 import { DecisionView } from '@decision-lab/react-views';
 import useShipmentReview from './useShipmentReview.js';
 import { formatMoney, formatTime } from './shipment.js';
+import { REVIEW_STATE, SLOT_CONFIRMATION_STATUS } from './semantics.js';
 import './styles.css';
 
 function Icon({ name, size = 18 }) {
@@ -251,10 +252,10 @@ function ConfirmationForm({ draft, editConfirmation }) {
           <legend className="sr-only">Consolidation confirmation record</legend>
           <div className="form-grid">
             <Select label="Confirmation status" value={record.status} onChange={edit('status')}>
-              <option value="none">No confirmation</option>
-              <option value="confirmed">Confirmed</option>
-              <option value="cancelled">Cancelled</option>
-              <option value="conflicting">Conflicting records</option>
+              <option value={SLOT_CONFIRMATION_STATUS.NONE}>No confirmation</option>
+              <option value={SLOT_CONFIRMATION_STATUS.CONFIRMED}>Confirmed</option>
+              <option value={SLOT_CONFIRMATION_STATUS.CANCELLED}>Cancelled</option>
+              <option value={SLOT_CONFIRMATION_STATUS.CONFLICTING}>Conflicting records</option>
             </Select>
             <Field
               label="Confirmation reference"
@@ -332,16 +333,16 @@ function ConfirmationForm({ draft, editConfirmation }) {
 
 function Results({ desk }) {
   const { status, current, before, config } = desk;
-  const complete = status === 'complete' && current?.available;
-  const running = status === 'running';
-  const dirty = status === 'dirty';
+  const complete = status === REVIEW_STATE.COMPLETE && current?.available;
+  const running = status === REVIEW_STATE.RUNNING;
+  const dirty = status === REVIEW_STATE.DIRTY;
   const earlierRun = complete ? desk.previousRun : desk.run;
   const stateLabel = running ? 'Calculating' : dirty ? 'Needs reassessment'
     : complete ? 'Current result' : 'Not yet reviewed';
   const heading = running ? 'Checking the complete arrangements…'
     : dirty ? 'Records changed. Review again.'
-      : status === 'unavailable' ? 'A complete result is unavailable.'
-        : status === 'invalid' ? 'Correct the input before reviewing.' : 'Review the current shipment.';
+      : status === REVIEW_STATE.UNAVAILABLE ? 'A complete result is unavailable.'
+        : status === REVIEW_STATE.INVALID ? 'Correct the input before reviewing.' : 'Review the current shipment.';
 
   // The team owns these controls and forms. The public view selects the useful
   // findings from the native SDK report; no second comparison is assembled here.
@@ -354,7 +355,7 @@ function Results({ desk }) {
         <Issues issues={desk.issues} />
         <div className="review-actions">
           <button className="button button-primary" onClick={desk.evaluate}
-            disabled={running || status === 'loading' || !desk.draft}>
+            disabled={running || status === REVIEW_STATE.LOADING || !desk.draft}>
             <Icon name="arrow" />{running ? 'Reviewing arrangements…' : 'Review arrangements'}
           </button>
           {running && <button className="button button-secondary" onClick={desk.cancel}>Cancel review</button>}
@@ -383,8 +384,8 @@ export default function App() {
   const desk = useShipmentReview();
   const fileInput = useRef(null);
   const [importError, setImportError] = useState(null);
-  const loading = desk.status === 'loading';
-  const canDownload = desk.status === 'complete' && desk.current?.available && desk.run;
+  const loading = desk.status === REVIEW_STATE.LOADING;
+  const canDownload = desk.status === REVIEW_STATE.COMPLETE && desk.current?.available && desk.run;
 
   async function importFile(event) {
     const file = event.target.files?.[0];
@@ -496,7 +497,7 @@ export default function App() {
                   <button
                     className="text-button"
                     onClick={desk.downloadCase}
-                    disabled={desk.status === 'running'}
+                    disabled={desk.status === REVIEW_STATE.RUNNING}
                   >
                     <Icon name="download" size={16} />Download case inputs
                   </button>

@@ -1,7 +1,8 @@
 import React, { useId, useRef, useState } from 'react';
 import { DecisionView } from '@decision-lab/react-views';
 import useGiftReview from './useGiftReview.js';
-import { formatMinutes, formatMoney } from './gifting.js';
+import { BOOKING_CONFIRMATION, formatMinutes, formatMoney } from './gifting.js';
+import { REVIEW_STATE } from './reviewState.js';
 
 function Field({ label, value, onChange, type = 'text', ...props }) {
   const id = useId();
@@ -116,9 +117,9 @@ function ConfirmationForm({ draft, editConfirmation }) {
       <p>Record what the written confirmation actually covers. Changing the current batch does not update an older record.</p>
       <div className="form-grid">
         <Select label="Confirmation status" value={record.status} onChange={edit('status')}>
-          <option value="none">No recorded confirmation</option>
-          <option value="positive">Positive confirmation</option>
-          <option value="negative">Negative confirmation</option>
+          <option value={BOOKING_CONFIRMATION.NONE}>No recorded confirmation</option>
+          <option value={BOOKING_CONFIRMATION.POSITIVE}>Positive confirmation</option>
+          <option value={BOOKING_CONFIRMATION.NEGATIVE}>Negative confirmation</option>
         </Select>
         <Field label="Confirmation reference" value={record.id} onChange={edit('id')} />
         <Field label="Confirmation source" value={record.source} onChange={edit('source')} />
@@ -207,11 +208,11 @@ function AvailabilityForm({ draft, caseData, config, editAvailability }) {
 function Results({ desk }) {
   const { current, before, status } = desk;
   const labels = {
-    loading: 'Loading case', ready: 'Ready to review', dirty: 'Needs reassessment',
-    running: 'Reviewing packages', complete: 'Review complete',
-    invalid: 'Inputs need attention', unavailable: 'Assessment unavailable',
+    [REVIEW_STATE.LOADING]: 'Loading case', [REVIEW_STATE.READY]: 'Ready to review', [REVIEW_STATE.DIRTY]: 'Needs reassessment',
+    [REVIEW_STATE.RUNNING]: 'Reviewing packages', [REVIEW_STATE.COMPLETE]: 'Review complete',
+    [REVIEW_STATE.INVALID]: 'Inputs need attention', [REVIEW_STATE.UNAVAILABLE]: 'Assessment unavailable',
   };
-  const earlierRun = status === 'complete' ? desk.previousRun : desk.run;
+  const earlierRun = status === REVIEW_STATE.COMPLETE ? desk.previousRun : desk.run;
   return (
     <section className="panel results" aria-labelledby="results-heading">
       <div className="results-heading">
@@ -219,14 +220,14 @@ function Results({ desk }) {
         <span className="state" role="status" aria-live="polite">{labels[status]}</span>
       </div>
       <div className="review-actions">
-        <button type="button" className="primary" onClick={desk.evaluate} disabled={status === 'loading' || status === 'running'}>Review packages</button>
-        {status === 'running' && <button type="button" onClick={desk.cancel}>Cancel review</button>}
+        <button type="button" className="primary" onClick={desk.evaluate} disabled={status === REVIEW_STATE.LOADING || status === REVIEW_STATE.RUNNING}>Review packages</button>
+        {status === REVIEW_STATE.RUNNING && <button type="button" onClick={desk.cancel}>Cancel review</button>}
         <button type="button" onClick={desk.downloadRun} disabled={!current}>Download SDK run</button>
       </div>
       <Issues issues={desk.issues} />
       {current ? <DecisionView report={desk.run.report} profile={desk.config.decisionPresentation} /> : (
         <div className="empty-state">
-          <strong>{status === 'dirty' ? 'The records have changed.' : 'Review the current batch records.'}</strong>
+          <strong>{status === REVIEW_STATE.DIRTY ? 'The records have changed.' : 'Review the current batch records.'}</strong>
           <p>Choose Review packages to assess the current quotes, confirmation, resources and permissions together.</p>
         </div>
       )}
@@ -282,7 +283,7 @@ export default function App() {
           <div><p className="eyebrow">Event operations</p><h1>Gift-kit Handoff Desk</h1><p>Which complete correction package can we put forward before the kits leave?</p></div>
           <div className="file-actions">
             <button type="button" onClick={() => fileInput.current.click()} disabled={!desk.config}>Import case</button>
-            <button type="button" onClick={desk.downloadCase} disabled={!desk.caseData || desk.status === 'loading'}>Download case inputs</button>
+            <button type="button" onClick={desk.downloadCase} disabled={!desk.caseData || desk.status === REVIEW_STATE.LOADING}>Download case inputs</button>
             <input ref={fileInput} aria-label="Import case" type="file" accept=".json,application/json" onChange={importFile} hidden />
           </div>
         </div>
@@ -315,7 +316,7 @@ export default function App() {
           <>
             <BatchBasis caseData={desk.caseData} config={desk.config} />
             <div className="desk-layout">
-              <fieldset className="input-column" aria-label="Current case inputs" disabled={desk.status === 'loading'}>
+              <fieldset className="input-column" aria-label="Current case inputs" disabled={desk.status === REVIEW_STATE.LOADING}>
                 <ReviewSetup draft={desk.draft} policy={desk.policy} editSetup={desk.editSetup} />
                 <QuoteForm draft={desk.draft} config={desk.config} editQuote={desk.editQuote} />
                 <ConfirmationForm draft={desk.draft} editConfirmation={desk.editConfirmation} />
@@ -326,7 +327,7 @@ export default function App() {
           </>
         ) : (
           <section className="panel">
-            <p role="status">{desk.status === 'loading' ? 'Loading the pinned app and batch records…' : 'The batch could not be loaded.'}</p>
+            <p role="status">{desk.status === REVIEW_STATE.LOADING ? 'Loading the pinned app and batch records…' : 'The batch could not be loaded.'}</p>
             <Issues issues={desk.issues} />
           </section>
         )}

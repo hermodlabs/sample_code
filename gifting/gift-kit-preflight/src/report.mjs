@@ -2,14 +2,17 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { RecordsView } from '@decision-lab/react-views';
 import { formatMinutes, formatPosition } from './gifting.js';
+import { PREFLIGHT_STATUS } from './preflightStatus.js';
 
 const h = React.createElement;
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 })[char]);
 const labels = {
-  eligible: 'Ready for review', blocked: 'No package meets the requirements',
-  'input-error': 'Correct the inputs', unavailable: 'Assessment unavailable',
+  [PREFLIGHT_STATUS.ELIGIBLE]: 'Ready for review',
+  [PREFLIGHT_STATUS.BLOCKED]: 'No package meets the requirements',
+  [PREFLIGHT_STATUS.INPUT_ERROR]: 'Correct the inputs',
+  [PREFLIGHT_STATUS.UNAVAILABLE]: 'Assessment unavailable',
 };
 const position = formatPosition;
 const duration = formatMinutes;
@@ -60,7 +63,9 @@ function sourceRecords(row) {
 }
 function details(row, policy) {
   const basis = timingBasis(row, policy);
-  if (row.status === 'input-error' || row.status === 'unavailable') return h(React.Fragment, null, list(row.messages), basis, sourceRecords(row));
+  if (row.status !== PREFLIGHT_STATUS.ELIGIBLE && row.status !== PREFLIGHT_STATUS.BLOCKED) {
+    return h(React.Fragment, null, list(row.messages), basis, sourceRecords(row));
+  }
   const preferred = row.review?.preferred ?? [], plans = row.review?.plans ?? [];
   const proposal = preferred.length
     ? h(React.Fragment, null, h('p', null, h('strong', null, preferred.map(plan => plan.label).join(' or '))),
@@ -87,9 +92,9 @@ function localArtifactHref(value) {
   return segments.some(segment => !segment || segment === '.' || segment === '..') ? null : segments.map(encodeURIComponent).join('/');
 }
 function continueReview(row) {
-  const action = row.status === 'eligible' ? 'Review the proposed package and obtain the required operating approvals.'
-    : row.status === 'blocked' ? 'Review the failed conditions and recorded intervals, revise the inputs where supported, then reassess.'
-      : row.status === 'input-error' ? 'Correct the source case before using a recommendation.' : 'Resolve the assessment problem, then run it again.';
+  const action = row.status === PREFLIGHT_STATUS.ELIGIBLE ? 'Review the proposed package and obtain the required operating approvals.'
+    : row.status === PREFLIGHT_STATUS.BLOCKED ? 'Review the failed conditions and recorded intervals, revise the inputs where supported, then reassess.'
+      : row.status === PREFLIGHT_STATUS.INPUT_ERROR ? 'Correct the source case before using a recommendation.' : 'Resolve the assessment problem, then run it again.';
   const downloads = [['case', 'Download case for the React desk'], ['run', 'Download complete CLI report'], ['validation', 'Input validation']];
   return h(React.Fragment, null, h('p', null, action), downloads.map(([field, label]) => {
     const href = localArtifactHref(row[field]);
@@ -113,7 +118,7 @@ ${renderToStaticMarkup(records('gift-kit-preflight-queue', [
   ['campaign', 'Campaign'], ['outcome', 'Outcome'], ['comparison', 'Package comparison'], ['next', 'Continue the review'],
 ], manifest.campaigns, (value, column, row) => {
   if (column.key === 'campaign') return h(React.Fragment, null, h('strong', null, row.id), h('small', null, row.owner));
-  if (column.key === 'outcome') return h(React.Fragment, null, h('span', { className: 'status' }, labels[row.status]),
+  if (column.key === 'outcome') return h(React.Fragment, null, h('span', { className: 'status' }, labels[row.status] ?? 'Unknown assessment status'),
     row.review?.available ? h('small', null, `${row.review.scenarioCount} retained fault configuration${row.review.scenarioCount === 1 ? '' : 's'}`) : null);
   if (column.key === 'comparison') return details(row, manifest.policy);
   return continueReview(row);

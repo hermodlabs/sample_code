@@ -4,11 +4,19 @@ import test from 'node:test';
 import { createDecisionLab } from '@decision-lab/sdk';
 import { createNodeExecutor } from '@decision-lab/sdk/node';
 import { buildCase, toDraft, cents, localTime, minuteFromLocal, summarizeRun } from '../src/shipment.js';
+import { REVIEW_OUTCOME, REVIEW_STATE, SLOT_CONFIRMATION_STATUS } from '../src/semantics.js';
 
 const data = new URL('../public/data/', import.meta.url);
 const config = JSON.parse(await readFile(new URL('config.json', data)));
 const appPackage = JSON.parse(await readFile(new URL(config.appUrl, data)));
 const cases = await Promise.all(config.cases.map(async entry => JSON.parse(await readFile(new URL(entry.url, data)))));
+
+test('screen vocabularies distinguish lifecycle, review outcome and source-record status', () => {
+  assert.deepEqual(Object.values(REVIEW_STATE), ['loading', 'ready', 'dirty', 'running', 'complete', 'invalid', 'unavailable']);
+  assert.deepEqual(Object.values(REVIEW_OUTCOME), ['eligible', 'blocked', 'unavailable']);
+  assert.deepEqual(Object.values(SLOT_CONFIRMATION_STATUS), ['none', 'confirmed', 'cancelled', 'conflicting']);
+  for (const values of [REVIEW_STATE, REVIEW_OUTCOME, SLOT_CONFIRMATION_STATUS]) assert.ok(Object.isFrozen(values));
+});
 
 test('form conversions round trip complete cases without changing record scopes', () => {
   for (const inputs of cases) assert.deepEqual(buildCase(inputs, toDraft(inputs, config), config), inputs);
@@ -35,6 +43,17 @@ test('an absent confirmation stays absent; adding one requires actual record fie
   assert.deepEqual(buildCase(inputs, draft, config).tables.slotConfirmations, []);
   draft.confirmation.status = 'confirmed';
   assert.throws(() => buildCase(inputs, draft, config), error => error.issues.some(issue => issue.path === 'confirmation.slotReference'));
+});
+
+test('slot choices preserve current source status and reject an unsupported status', () => {
+  for (const status of [SLOT_CONFIRMATION_STATUS.CONFIRMED, SLOT_CONFIRMATION_STATUS.CANCELLED, SLOT_CONFIRMATION_STATUS.CONFLICTING]) {
+    const inputs = structuredClone(cases[0]);
+    inputs.tables.slotConfirmations[0].status = status;
+    assert.deepEqual(buildCase(inputs, toDraft(inputs, config), config), inputs);
+  }
+  const draft = toDraft(cases[0], config);
+  draft.confirmation.status = 'pending';
+  assert.throws(() => buildCase(cases[0], draft, config), error => error.issues.some(issue => issue.path === 'confirmation.status'));
 });
 
 test('amounts and dates use explicit supported units without coercion', () => {

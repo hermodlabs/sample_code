@@ -1,7 +1,9 @@
 #!/usr/bin/env node
+import { CLI_EXIT_CODE } from '@decision-lab/cli';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { runPreflight } from './src/preflight.mjs';
+import { PREFLIGHT_STATUS } from './src/preflightStatus.js';
 
 try {
   const { values } = parseArgs({ options: { output: { type: 'string' } } });
@@ -10,7 +12,7 @@ try {
     outputDir: values.output ?? fileURLToPath(new URL('./.output/demo', import.meta.url)),
   });
   const actual = result.manifest.campaigns.map(row => row.status);
-  const expected = ['eligible', 'eligible', 'blocked', 'input-error'];
+  const expected = [PREFLIGHT_STATUS.ELIGIBLE, PREFLIGHT_STATUS.ELIGIBLE, PREFLIGHT_STATUS.BLOCKED, PREFLIGHT_STATUS.INPUT_ERROR];
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     throw new Error(`Unexpected demo outcomes: ${actual.join(', ')}`);
   }
@@ -18,5 +20,5 @@ try {
   console.log('The ordinary review command returns exit 2 for this intentionally invalid fourth case.');
 } catch (error) {
   console.error(error.message);
-  process.exitCode = error.exitCode ?? 4;
+  process.exitCode = error.exitCode ?? CLI_EXIT_CODE.OPERATIONAL_ERROR;
 }

@@ -279,3 +279,9 @@ timing inputs and all operating checks remain available in technical inspection.
 Task-specific forms, cancellation and downloads remain ordinary React code.
 The SDK owns the evaluation, and the shared view owns report presentation. SDK
 and CLI consumers that do not need React need not install the views package.
+
+The app-local vocabularies keep conditions readable without changing stored
+values: `REVIEW_STATE` names the React lifecycle, `REVIEW_OUTCOME` names the
+projected business outcome, and `BOOKING_CONFIRMATION` names the form's evidence
+choices. A `COMPLETE` review can have a `BLOCKED` outcome. Missing confirmation
+remains distinct from an explicitly negative record.

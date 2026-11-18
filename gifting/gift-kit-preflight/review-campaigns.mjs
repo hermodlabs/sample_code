@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { CLI_EXIT_CODE } from '@decision-lab/cli';
 import { parseArgs } from 'node:util';
 import { runPreflight } from './src/preflight.mjs';
 
@@ -20,12 +21,12 @@ try {
       + '  [--config data/config.json] [--timeout-ms 30000] [--max-plans 5]');
   } else {
     if (!values.input || !values.output) {
-      throw Object.assign(new Error('Supply --input and a fresh --output directory. Use --help for an example.'), { exitCode: 2 });
+      throw Object.assign(new Error('Supply --input and a fresh --output directory. Use --help for an example.'), { exitCode: CLI_EXIT_CODE.INVALID_INPUT });
     }
     const number = (name, fallback, minimum) => {
       const value = values[name] === undefined ? fallback : Number(values[name]);
       if (value !== undefined && (!Number.isSafeInteger(value) || value < minimum)) {
-        throw Object.assign(new Error(`--${name} must be an integer of at least ${minimum}.`), { exitCode: 2 });
+        throw Object.assign(new Error(`--${name} must be an integer of at least ${minimum}.`), { exitCode: CLI_EXIT_CODE.INVALID_INPUT });
       }
       return value;
     };
@@ -42,5 +43,5 @@ try {
   }
 } catch (error) {
   console.error(error.message);
-  process.exitCode = error.exitCode ?? 4;
+  process.exitCode = error.exitCode ?? CLI_EXIT_CODE.OPERATIONAL_ERROR;
 }

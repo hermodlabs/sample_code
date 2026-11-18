@@ -70,6 +70,14 @@ or importing a case loads its form without running it. Evaluation is explicit.
 Editing immediately withholds the current recommendation and retains the last
 calculation as a comparison.
 
+[`src/semantics.js`](src/semantics.js) names the small vocabularies used by the
+form and hook. `REVIEW_STATE` describes React's loading, editing and evaluation
+lifecycle; `REVIEW_OUTCOME` describes whether an available result is eligible
+or blocked. A completed review can be blocked. `SLOT_CONFIRMATION_STATUS.NONE`
+means no source record, so the form writes an empty table rather than a `none`
+record. These frozen maps and JSDoc types preserve the existing wire values;
+native SDK execution and assessment statuses keep their own meanings.
+
 [`src/shipment.js`](src/shipment.js) contains the form conversions and
 `summarizeRun()`. The summary uses the public
 `commitment.resolveCommitmentAssessment(run.assessment, run.report)` helper to

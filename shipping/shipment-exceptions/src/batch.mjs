@@ -1,3 +1,4 @@
+import { CLI_EXIT_CODE } from '@decision-lab/cli';
 import { createHash } from 'node:crypto';
 import { lstat, mkdir, mkdtemp, readFile, realpath, rename, rm, rmdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -6,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { loadBatch, InputError } from './inputs.mjs';
 import { invokeCLI } from './cli.mjs';
 import { projectRun, renderHTML, renderCSV } from './report.mjs';
+import { classify, nextAction } from './classify.mjs';
+import { BATCH_STATUS } from './semantics.mjs';
 
 export const defaultConfig = fileURLToPath(new URL('../config.json', import.meta.url));
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -14,7 +17,7 @@ const safeID = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]
 const inside = (child, parent) => child === parent || child.startsWith(`${parent}${path.sep}`);
 
 export class BatchError extends Error {
-  constructor(message, exitCode = 4) { super(message); this.name = 'BatchError'; this.exitCode = exitCode; }
+  constructor(message, exitCode = CLI_EXIT_CODE.OPERATIONAL_ERROR) { super(message); this.name = 'BatchError'; this.exitCode = exitCode; }
 }
 
 async function optionalJSON(file) {
@@ -38,13 +41,13 @@ async function prospectiveRealPath(target) {
 }
 
 async function assertFreshOutput(output, protectedPaths) {
-  try { await lstat(output); throw new BatchError(`Output already exists: ${output}. Choose a fresh directory.`, 2); }
+  try { await lstat(output); throw new BatchError(`Output already exists: ${output}. Choose a fresh directory.`, CLI_EXIT_CODE.INVALID_INPUT); }
   catch (error) { if (error.code !== 'ENOENT') throw error; }
   const resolved = await prospectiveRealPath(output);
   for (const source of protectedPaths) {
     const canonical = await prospectiveRealPath(source);
     if (inside(resolved, canonical) || inside(canonical, resolved)) {
-      throw new BatchError(`Output overlaps retained input or a previous batch: ${source}`, 2);
+      throw new BatchError(`Output overlaps retained input or a previous batch: ${source}`, CLI_EXIT_CODE.INVALID_INPUT);
     }
   }
 }
@@ -76,32 +79,6 @@ function compareInputs(before, after, prefix = '') {
   return [{ path: prefix, before: before ?? null, after: after ?? null }];
 }
 
-function preferredSignature(projection) {
-  return projection.preferred.map(plan => ({
-    arrangement: plan.arrangementId, expense: plan.expense, arrivalMinutes: plan.arrivalMinutes,
-  })).sort((a, b) => a.arrangement.localeCompare(b.arrangement));
-}
-
-function classify(current, before, changes) {
-  if (!current?.available) return 'unavailable';
-  if (current.status === 'blocked') return 'blocked';
-  if (!before?.available) return 'new';
-  if (!isDeepStrictEqual(preferredSignature(current), preferredSignature(before))) return 'recommendation-changed';
-  return changes.length ? 'conditions-changed' : 'unchanged';
-}
-
-function nextAction(row) {
-  switch (row.status) {
-    case 'input-error': return 'Correct the source record, then run a new assessment; do not reuse the previous proposal as current.';
-    case 'unavailable': return 'Resolve the evaluation or report problem and reassess before using a proposal.';
-    case 'blocked': return 'Review the failed conditions with the shipment owner. Obtain correctly scoped authority or revise the available arrangements.';
-    case 'recommendation-changed': return 'Review the changed proposal and its supporting conditions before replacing the previous arrangement.';
-    case 'conditions-changed': return 'Review the changed inputs even though the preferred arrangement is unchanged.';
-    case 'unchanged': return 'Confirm the source records remain current before operational handoff.';
-    default: return 'Review the calculated proposal and obtain the required operating approvals.';
-  }
-}
-
 function diagnostics(result, fallback) {
   try {
     const value = JSON.parse(result.stderr || result.stdout);
@@ -113,15 +90,15 @@ async function checkedPrevious(file, config) {
   if (!file) return { rows: new Map(), receipts: [] };
   const manifest = await optionalJSON(file);
   if (manifest?.format !== 'shipment-exceptions-batch/1' || !Array.isArray(manifest.rows)) {
-    throw new BatchError('The previous file is not a shipment-exceptions batch manifest.', 2);
+    throw new BatchError('The previous file is not a shipment-exceptions batch manifest.', CLI_EXIT_CODE.INVALID_INPUT);
   }
   if (!isDeepStrictEqual(manifest.binding, config.binding)) {
-    throw new BatchError('The previous batch uses different app rules. Compare the same pinned app release, or start a new baseline.', 2);
+    throw new BatchError('The previous batch uses different app rules. Compare the same pinned app release, or start a new baseline.', CLI_EXIT_CODE.INVALID_INPUT);
   }
   const root = await realpath(path.dirname(file));
   const rows = new Map(), receipts = [];
   for (const row of manifest.rows) {
-    if (!safeID(row.shipmentId) || rows.has(row.shipmentId)) throw new BatchError('The previous batch repeats or has an invalid shipment ID.', 2);
+    if (!safeID(row.shipmentId) || rows.has(row.shipmentId)) throw new BatchError('The previous batch repeats or has an invalid shipment ID.', CLI_EXIT_CODE.INVALID_INPUT);
     // Never trust saved summary booleans. Verify the full retained run's bytes
     // and reconstruct the previous proposal from its report. These receipts
     // detect changed local files; they do not authenticate a publisher.
@@ -129,19 +106,19 @@ async function checkedPrevious(file, config) {
     if (!receipt) { rows.set(row.shipmentId, { projection: null, inputs: null }); continue; }
     const name = receipt.file;
     if (typeof name !== 'string' || path.isAbsolute(name) || name.split(/[\\/]/).some(part => part === '..' || part === '') || !/^[a-f0-9]{64}$/.test(receipt.sha256)) {
-      throw new BatchError('The previous batch contains an unsafe artifact reference.', 2);
+      throw new BatchError('The previous batch contains an unsafe artifact reference.', CLI_EXIT_CODE.INVALID_INPUT);
     }
     const artifactPath = await realpath(path.join(root, name));
-    if (!inside(artifactPath, root)) throw new BatchError('A previous artifact resolves outside its batch.', 2);
+    if (!inside(artifactPath, root)) throw new BatchError('A previous artifact resolves outside its batch.', CLI_EXIT_CODE.INVALID_INPUT);
     const stat = await lstat(artifactPath);
-    if (!stat.isFile() || stat.size > 50_000_000) throw new BatchError('The previous run is not a supported regular artifact.', 2);
+    if (!stat.isFile() || stat.size > 50_000_000) throw new BatchError('The previous run is not a supported regular artifact.', CLI_EXIT_CODE.INVALID_INPUT);
     const bytes = await readFile(artifactPath);
-    if (bytes.length !== receipt.bytes || sha256(bytes) !== receipt.sha256) throw new BatchError(`The previous run changed: ${name}`, 2);
+    if (bytes.length !== receipt.bytes || sha256(bytes) !== receipt.sha256) throw new BatchError(`The previous run changed: ${name}`, CLI_EXIT_CODE.INVALID_INPUT);
     receipts.push({ file: artifactPath, bytes: bytes.length, sha256: sha256(bytes) });
     const run = JSON.parse(bytes);
     const projection = projectRun(run, { ...config, expectedBinding: config.binding });
     if (run.input?.inputs?.id !== row.shipmentId || run.input?.inputs?.parameters?.orderId !== row.orderId) {
-      throw new BatchError('A previous run belongs to a different shipment or order.', 2);
+      throw new BatchError('A previous run belongs to a different shipment or order.', CLI_EXIT_CODE.INVALID_INPUT);
     }
     rows.set(row.shipmentId, { projection, inputs: run.input.inputs });
   }
@@ -155,18 +132,18 @@ async function checkedPrevious(file, config) {
  * a changed order never overwrites the basis of an earlier proposal.
  */
 export async function runBatch(options) {
-  if (!options.inputDir || !options.retainedDir || !options.outputDir) throw new BatchError('--input, --retained and --output are required.', 2);
+  if (!options.inputDir || !options.retainedDir || !options.outputDir) throw new BatchError('--input, --retained and --output are required.', CLI_EXIT_CODE.INVALID_INPUT);
   const configFile = path.resolve(options.configFile ?? defaultConfig);
   const configBytes = await readFile(configFile);
   const config = JSON.parse(configBytes);
-  if (config.format !== 'shipment-exceptions-config/1' || !config.appFile || !config.binding) throw new BatchError('Unsupported batch configuration.', 2);
+  if (config.format !== 'shipment-exceptions-config/1' || !config.appFile || !config.binding) throw new BatchError('Unsupported batch configuration.', CLI_EXIT_CODE.INVALID_INPUT);
   const appFile = path.resolve(path.dirname(configFile), config.appFile);
   const appBytes = await readFile(appFile);
-  if (sha256(appBytes) !== config.appFileSHA256) throw new BatchError('The pinned app file changed. Review its release and configuration before running.', 2);
+  if (sha256(appBytes) !== config.appFileSHA256) throw new BatchError('The pinned app file changed. Review its release and configuration before running.', CLI_EXIT_CODE.INVALID_INPUT);
   const createdAt = options.createdAt ?? new Date().toISOString();
-  if (!/^\d{4}-\d\d-\d\dT.*(?:Z|[+-]\d\d:\d\d)$/.test(createdAt) || !Number.isFinite(Date.parse(createdAt))) throw new BatchError('--created-at needs an ISO timestamp with an offset.', 2);
-  if (options.maxPlans !== undefined && (!Number.isSafeInteger(options.maxPlans) || options.maxPlans < 0 || options.maxPlans > 100000)) throw new BatchError('--max-plans must be a whole number from 0 to 100000.', 2);
-  if (options.timeoutMs !== undefined && (!Number.isSafeInteger(options.timeoutMs) || options.timeoutMs < 1)) throw new BatchError('--timeout-ms must be a positive whole number.', 2);
+  if (!/^\d{4}-\d\d-\d\dT.*(?:Z|[+-]\d\d:\d\d)$/.test(createdAt) || !Number.isFinite(Date.parse(createdAt))) throw new BatchError('--created-at needs an ISO timestamp with an offset.', CLI_EXIT_CODE.INVALID_INPUT);
+  if (options.maxPlans !== undefined && (!Number.isSafeInteger(options.maxPlans) || options.maxPlans < 0 || options.maxPlans > 100000)) throw new BatchError('--max-plans must be a whole number from 0 to 100000.', CLI_EXIT_CODE.INVALID_INPUT);
+  if (options.timeoutMs !== undefined && (!Number.isSafeInteger(options.timeoutMs) || options.timeoutMs < 1)) throw new BatchError('--timeout-ms must be a positive whole number.', CLI_EXIT_CODE.INVALID_INPUT);
   const output = path.resolve(options.outputDir);
   const previousFile = options.previousFile && path.resolve(options.previousFile);
   const protectedPaths = [path.resolve(options.inputDir), path.resolve(options.retainedDir), configFile, appFile,
@@ -183,7 +160,7 @@ export async function runBatch(options) {
     { file: appFile, bytes: appBytes.length, sha256: sha256(appBytes) },
     ...(previousReceipt ? [previousReceipt] : []), ...prior.receipts];
   for (const receipt of receipts) {
-    if (!isDeepStrictEqual(receipt, await fileReceipt(receipt.file))) throw new BatchError(`Source changed during import: ${receipt.file}. Export a stable snapshot and rerun.`, 2);
+    if (!isDeepStrictEqual(receipt, await fileReceipt(receipt.file))) throw new BatchError(`Source changed during import: ${receipt.file}. Export a stable snapshot and rerun.`, CLI_EXIT_CODE.INVALID_INPUT);
   }
   await mkdir(path.dirname(output), { recursive: true });
   const stage = await mkdtemp(path.join(path.dirname(output), '.shipment-batch-'));
@@ -196,17 +173,17 @@ export async function runBatch(options) {
   try {
     // Verify the complete package with the installed CLI, not just JSON.parse.
     const opened = await invokeCLI(['app', 'open', appFile, '--output', path.join(stage, 'app.json')], transcript);
-    if (opened.exitCode !== 0) throw new BatchError(`The CLI rejected the pinned app: ${opened.stderr}`, opened.exitCode);
+    if (opened.exitCode !== CLI_EXIT_CODE.COMPLETED) throw new BatchError(`The CLI rejected the pinned app: ${opened.stderr}`, opened.exitCode);
     const openedApp = await optionalJSON(path.join(stage, 'app.json'));
     if (openedApp?.app?.id !== config.binding.appId || openedApp.app.version !== config.binding.release || openedApp.app.contentHash !== config.binding.appHash || openedApp.contentHash !== config.binding.packageHash) {
-      throw new BatchError('The pinned app identity does not match config.json.', 2);
+      throw new BatchError('The pinned app identity does not match config.json.', CLI_EXIT_CODE.INVALID_INPUT);
     }
     const version = await invokeCLI(['--version'], transcript);
     for (const job of batch.jobs) {
       const row = {
         shipmentId: job.shipmentId, orderId: job.orderId, orderRevision: job.orderRevision,
         owner: job.owner, deadline: null, reviewState: 'calculated-awaiting-review',
-        status: 'input-error', before: previous.get(job.shipmentId)?.projection ?? null, current: null,
+        status: BATCH_STATUS.INPUT_ERROR, before: previous.get(job.shipmentId)?.projection ?? null, current: null,
         diagnostics: job.errors.map(error => ({ code: 'SOURCE_INPUT', message: error.message, path: `${path.basename(error.source)}:${error.line}` })),
         changes: [], sources: job.sourceFiles.map(file => ({ file })), links: [], artifacts: {},
       };
@@ -232,9 +209,9 @@ export async function runBatch(options) {
       const validated = await invokeCLI(['case', 'validate', '--app', appFile, '--case', caseFile, '--output', path.join(directory, 'validation.json')], transcript);
       const validation = await optionalJSON(path.join(directory, 'validation.json'));
       if (validation) row.links.push({ label: 'Input validation', href: `${relative}/validation.json` });
-      if (validated.exitCode !== 0 || validation?.valid !== true) {
-        row.status = validated.exitCode === 4 ? 'unavailable' : 'input-error';
-        if (validated.exitCode === 4) row.failureKind = 'operational';
+      if (validated.exitCode !== CLI_EXIT_CODE.COMPLETED || validation?.valid !== true) {
+        row.status = validated.exitCode === CLI_EXIT_CODE.OPERATIONAL_ERROR ? BATCH_STATUS.UNAVAILABLE : BATCH_STATUS.INPUT_ERROR;
+        if (validated.exitCode === CLI_EXIT_CODE.OPERATIONAL_ERROR) row.failureKind = 'operational';
         row.diagnostics.push(...(validation?.diagnostics?.length ? validation.diagnostics : diagnostics(validated, 'CASE_INVALID')));
       } else {
         const args = ['run', '--app', appFile, '--case', caseFile, '--reports', 'all', '--locale', 'en-US',
@@ -251,9 +228,9 @@ export async function runBatch(options) {
           }
         }
         row.status = classify(row.current, row.before, row.changes);
-        if (evaluated.exitCode !== 0 || !row.current?.available) {
-          row.status = evaluated.exitCode === 2 ? 'input-error' : 'unavailable';
-          if (evaluated.exitCode === 4) row.failureKind = 'operational';
+        if (evaluated.exitCode !== CLI_EXIT_CODE.COMPLETED || !row.current?.available) {
+          row.status = evaluated.exitCode === CLI_EXIT_CODE.INVALID_INPUT ? BATCH_STATUS.INPUT_ERROR : BATCH_STATUS.UNAVAILABLE;
+          if (evaluated.exitCode === CLI_EXIT_CODE.OPERATIONAL_ERROR) row.failureKind = 'operational';
           row.diagnostics.push(...(row.current?.issues?.map(message => ({ code: 'ASSESSMENT_UNAVAILABLE', message })) ?? diagnostics(evaluated, 'CLI_RUN_FAILED')));
         }
       }
@@ -266,12 +243,13 @@ export async function runBatch(options) {
     // Refuse to publish a mixed snapshot if an exporter changed a source file
     // while the batch was running. Source files are always read-only here.
     for (const receipt of receipts) {
-      if (!isDeepStrictEqual(receipt, await fileReceipt(receipt.file))) throw new BatchError(`Source changed during assessment: ${receipt.file}. Export a stable snapshot and rerun.`, 2);
+      if (!isDeepStrictEqual(receipt, await fileReceipt(receipt.file))) throw new BatchError(`Source changed during assessment: ${receipt.file}. Export a stable snapshot and rerun.`, CLI_EXIT_CODE.INVALID_INPUT);
     }
     const counts = Object.fromEntries([...new Set(rows.map(row => row.status))].map(status => [status, rows.filter(row => row.status === status).length]));
     const metadata = { ...config, createdAt, app: { id: config.binding.appId, release: config.binding.release, appHash: config.binding.appHash } };
-    const exitCode = rows.some(row => row.failureKind === 'operational') ? 4
-      : rows.some(row => row.status === 'unavailable') ? 3 : rows.some(row => row.status === 'input-error') ? 2 : 0;
+    const exitCode = rows.some(row => row.failureKind === 'operational') ? CLI_EXIT_CODE.OPERATIONAL_ERROR
+      : rows.some(row => row.status === BATCH_STATUS.UNAVAILABLE) ? CLI_EXIT_CODE.UNAVAILABLE
+        : rows.some(row => row.status === BATCH_STATUS.INPUT_ERROR) ? CLI_EXIT_CODE.INVALID_INPUT : CLI_EXIT_CODE.COMPLETED;
     const manifest = {
       format: 'shipment-exceptions-batch/1', createdAt, reviewState: 'calculated-awaiting-review',
       binding: config.binding, appFileSHA256: config.appFileSHA256, cliVersion: version.stdout.trim(),
@@ -297,5 +275,5 @@ export async function runBatch(options) {
 }
 
 export function batchErrorCode(error) {
-  return error instanceof InputError || error.name === 'CsvError' || error instanceof SyntaxError ? 2 : error.exitCode ?? 4;
+  return error instanceof InputError || error.name === 'CsvError' || error instanceof SyntaxError ? CLI_EXIT_CODE.INVALID_INPUT : error.exitCode ?? CLI_EXIT_CODE.OPERATIONAL_ERROR;
 }

@@ -1,4 +1,5 @@
-import { commitment } from '@decision-lab/sdk';
+import { commitment, EXECUTION_STATUS, inspectReportCompleteness } from '@decision-lab/sdk';
+import { REVIEW_OUTCOME, SLOT_CONFIRMATION_STATUS } from './semantics.js';
 
 const confirmationTimes = ['confirmedAt', 'knownAt', 'validFrom', 'validUntil'];
 const confirmationFields = ['slotReference', 'orderId', 'orderRevision', 'recipient', 'shipPoint', 'profileVersion'];
@@ -94,7 +95,7 @@ export function toDraft(inputs, config) {
   const record = records[0];
   const quote = inputs.tables.arrangements.find(row => row.id === arrangement);
   const confirmation = {
-    status: record?.status ?? 'none',
+    status: record?.status ?? SLOT_CONFIRMATION_STATUS.NONE,
     slotReference: record?.slotReference ?? '',
     orderId: record?.orderId ?? inputs.parameters.orderId,
     orderRevision: record?.orderRevision ?? '',
@@ -151,11 +152,11 @@ export function buildCase(base, draft, config) {
   });
 
   const row = draft.confirmation;
-  if (!['none', 'confirmed', 'cancelled', 'conflicting'].includes(row.status)) {
+  if (!Object.values(SLOT_CONFIRMATION_STATUS).includes(row.status)) {
     issues.push({ path: 'confirmation.status', message: 'Select a supported current record status.' });
   }
   result.tables.slotConfirmations = [];
-  if (row.status !== 'none') {
+  if (row.status !== SLOT_CONFIRMATION_STATUS.NONE) {
     const confirmation = {
       ...base.tables.slotConfirmations[0],
       arrangement: config.slotArrangement ?? 'consolidated', status: row.status,
@@ -183,21 +184,20 @@ export function buildCase(base, draft, config) {
 export function summarizeRun(run, config) {
   function unavailable(message) {
     return {
-      available: false, status: 'unavailable', issues: [message], identity: run.identity,
+      available: false, status: REVIEW_OUTCOME.UNAVAILABLE, issues: [message], identity: run.identity,
       scope: null, finding: run.assessment?.finding, preferredIds: [], preferred: [], plans: [],
     };
   }
-  const completeness = run.report?.completeness;
-  if (run.execution?.status !== 'completed' || completeness?.materialized !== true
-    || completeness.allRequestedViews !== true || completeness.allRetainedContexts !== true
-    || completeness.truncated !== false || completeness.assessmentComplete !== true) {
+  // Report availability and computation completion are separate contracts.
+  if (run.execution?.status !== EXECUTION_STATUS.COMPLETED
+    || !inspectReportCompleteness(run.report).complete) {
     return unavailable('The calculation or its report is incomplete. Reassess before choosing an arrangement.');
   }
 
   // The public resolver restores the SDK's retained assessment. Consumers do
   // not need to traverse normalized report tables or implement the decoder.
   const assessment = commitment.resolveCommitmentAssessment(run.assessment, run.report);
-  if (assessment.status !== 'complete' || assessment.coverage.complete !== true
+  if (assessment.status !== commitment.COMMITMENT_ASSESSMENT_STATUS.COMPLETE || assessment.coverage.complete !== true
     || assessment.coverage.admissionComplete !== true) {
     return unavailable('The calculation has not checked every admitted arrangement and situation.');
   }
@@ -233,7 +233,7 @@ export function summarizeRun(run, config) {
   const preferred = plans.filter(plan => plan.preferred);
   const parameters = run.input.inputs.parameters;
   return {
-    available: true, status: assessment.feasiblePlanIds.length ? 'eligible' : 'blocked', issues: [],
+    available: true, status: assessment.feasiblePlanIds.length ? REVIEW_OUTCOME.ELIGIBLE : REVIEW_OUTCOME.BLOCKED, issues: [],
     identity: run.identity,
     scope: { orderId: parameters.orderId, orderRevision: parameters.orderRevision,
       recipient: parameters.recipient, shipDate: parameters.shipDate, profileVersion: parameters.profileVersion },
