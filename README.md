@@ -14,6 +14,11 @@ Each domain keeps its Node, Python and React projects together. The domain READM
 how their batch and individual-review steps relate and lists the commands to run
 them from the repository root.
 
+The [nightlife promotion workflow](nightlife/README.md) demonstrates a different
+integration: author the operating app and workflow from source, check the
+business scenarios, package it, and continue a reviewed case in Decision Lab.
+Its feasibility-only assessment leaves the deployment choice to the manager.
+
 The separate [shipment readiness learning app](shipping/readiness-learning/README.md)
 uses Python machine learning to propose reviewed probability estimates, then
 asks the SDK whether a timely registration check is worth buying. Its optional
