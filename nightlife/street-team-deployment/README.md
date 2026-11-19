@@ -13,7 +13,8 @@ promotion rules in the runner or a custom React screen.
 ## Run with the matching development packages
 
 Use Node 22.19+ (Node 24 recommended). The example requires the development build
-with `ceilDivide`, `floorDivide` and commitment `feasibility-only` support.
+with `ceilDivide`, `floorDivide`, commitment `feasibility-only` and workflow
+question-view output support.
 Earlier archives also named `0.1.0` may lack them. The checked-in
 `qualified-build.json` identifies the exact tested package SHA-256 values;
 it does not announce an npm release.
@@ -114,10 +115,17 @@ must reconsider that choice when its economic assumptions change.
 1. In **Collections**, choose **Import app, workflow or case** and select
    `.output/author/promotion.workflow.json`. This installs the exact CLI package.
 2. Import `.output/decision/run.json` separately to continue Sam's reviewed case.
-3. Inspect the decision brief, the conditional economics and supporting operating
-   findings. Edit staffing, accept the revised answer and reassess; review the new
+3. The decision brief starts with the one-person expense recovery view: $200
+   expense, $40 contribution per genuinely additional guest, five guests to cover
+   expense and six to exceed it. Open **Compare financial hurdles** for the compact
+   table, or the detail disclosures for assumptions and calculation basis.
+   **Expense recovery** in the report tabs uses the same authored view. Changing
+   the item inspected stays synchronized across these locations and does not
+   change Sam's proposal or authorization. All complete financial records remain
+   available in SDK output and deliberate inspection.
+4. Edit staffing, accept the revised answer and reassess; review the new
    finding before supplying a new proposal and authorization.
-4. To inspect the authoring work, use **Workspaces → Create workflow → Import
+5. To inspect the authoring work, use **Workspaces → Create workflow → Import
    workflow**, selecting `.output/author/reviewed.workflow-draft.json`. The draft
    retains the author binding reviews; the distribution package does not.
 

@@ -1,7 +1,7 @@
 {
   "format": "decision-lab-workflow/1",
   "id": "street-team-deployment",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "title": "Review a street-team deployment",
   "question": "Which deployment can we operate tonight, and what would it need to recover?",
   "description": "Review staffing, timing, access and spending before Sam chooses a bounded promotion. Conditional additional-guest thresholds make the commitment explicit without forecasting response.",
@@ -42,7 +42,7 @@
       "path": "promotion.spending",
       "label": "Deployment charges and spending delegation",
       "question": "What future expense and recorded spending delegation apply tonight?",
-      "meaning": "USD cents. Complete incremental expense comes from the operating option quotes; the limit and delegated permission are separate from Sam\u2019s final specific authorization.",
+      "meaning": "USD cents. Complete incremental expense comes from the operating option quotes; the limit and delegated permission are separate from Sam’s final specific authorization.",
       "role": "venue-manager",
       "type": "object",
       "required": true
@@ -70,7 +70,7 @@
     {
       "id": "proposal",
       "path": "promotion.proposal",
-      "label": "Sam\u2019s explicit deployment choice",
+      "label": "Sam’s explicit deployment choice",
       "question": "Which passing deployment does Sam choose on this accepted assessment?",
       "meaning": "Record exact accepted assessment run hash and evaluation reference, venue, date, deployment and manager. Selecting a row in a report does not make this decision.",
       "role": "venue-manager",
@@ -300,7 +300,7 @@
     }
   },
   "metadata": {
-    "qualification": "Fictional one-evening operating review. Complete finite deployments are checked for feasibility; none is ranked as most profitable. Whole-guest thresholds are conditional arithmetic, not demand forecasts or causal evidence. Accepted findings, Sam\u2019s choice, sourced authorization and actual performance remain separate.",
+    "qualification": "Fictional one-evening operating review. Complete finite deployments are checked for feasibility; none is ranked as most profitable. Whole-guest thresholds are conditional arithmetic, not demand forecasts or causal evidence. Accepted findings, Sam’s choice, sourced authorization and actual performance remain separate.",
     "presentation": {
       "version": 1,
       "questions": {
@@ -532,7 +532,7 @@
               ]
             }
           },
-          "help": "USD cents. Complete incremental expense comes from the operating option quotes; the limit and delegated permission are separate from Sam\u2019s final specific authorization."
+          "help": "USD cents. Complete incremental expense comes from the operating option quotes; the limit and delegated permission are separate from Sam’s final specific authorization."
         },
         "contribution": {
           "type": "object",
@@ -589,7 +589,7 @@
         },
         "proposal": {
           "type": "object",
-          "label": "Sam\u2019s explicit deployment choice",
+          "label": "Sam’s explicit deployment choice",
           "fields": {
             "manager": {
               "type": "string",
@@ -715,7 +715,7 @@
       "groups": [
         {
           "id": "basis",
-          "label": "Tonight\u2019s operating basis",
+          "label": "Tonight’s operating basis",
           "question": "Which deployments can we operate this evening?",
           "subtabs": [
             {
@@ -759,7 +759,7 @@
         },
         {
           "id": "choice",
-          "label": "Sam\u2019s decision",
+          "label": "Sam’s decision",
           "question": "What has Sam chosen on the accepted basis?",
           "subtabs": [
             {
@@ -826,7 +826,7 @@
           "customerJourneyMinutes": "Conditional customer journey (minutes)",
           "latestArrivalMinute": "Latest useful guest arrival",
           "expenseLimitMinor": "Incremental deployment expense limit",
-          "selectedDeployment": "Sam\u2019s current deployment choice",
+          "selectedDeployment": "Sam’s current deployment choice",
           "selectedExpenseMinor": "Chosen incremental expense",
           "selectedInsideStaff": "Qualified staff remaining inside"
         },
@@ -901,51 +901,171 @@
             "id": "thresholds",
             "kind": "records",
             "sectionId": "guest-thresholds",
-            "label": "Guest thresholds",
-            "question": "How many genuinely additional guests would cover each commitment?",
-            "columns": [
-              {
-                "key": "deployment",
-                "label": "Deployment"
-              },
-              {
-                "key": "status",
-                "label": "Threshold status"
-              },
-              {
-                "key": "expenseMinor",
-                "label": "Incremental deployment expense"
-              },
-              {
-                "key": "existingCustomerDiscountLossMinor",
-                "label": "Separate existing-customer discount loss"
-              },
-              {
-                "key": "contributionMinor",
-                "label": "Contribution per genuinely additional guest"
-              },
-              {
-                "key": "breakEvenGuests",
-                "label": "Additional guests to cover the commitment"
-              },
-              {
-                "key": "firstPositiveGuests",
-                "label": "First positive additional guest count"
-              }
-            ]
+            "label": "Expense recovery",
+            "question": "What would this deployment need to recover?",
+            "viewId": "expense-recovery"
           }
         ],
         "brief": {
           "leadSectionIds": [
+            "guest-thresholds",
             "decision"
           ],
           "sectionOrder": [
-            "operating-options",
             "guest-thresholds",
+            "operating-options",
             "decision",
             "qualification"
           ]
-        }
+        },
+        "questionViews": [
+          {
+            "id": "expense-recovery",
+            "sectionId": "guest-thresholds",
+            "title": "Expense recovery",
+            "question": "What would this deployment need to recover?",
+            "selection": {
+              "group": "deployment",
+              "keyField": "deployment",
+              "labelField": "deployment",
+              "defaultKey": "small-standard"
+            },
+            "summary": {
+              "title": "The financial hurdle",
+              "question": "How many genuinely additional guests would cover this deployment?",
+              "fields": [
+                {
+                  "key": "expenseMinor",
+                  "label": "Additional expense",
+                  "format": "money"
+                },
+                {
+                  "key": "contributionMinor",
+                  "label": "Contribution per additional guest",
+                  "format": "money"
+                },
+                {
+                  "key": "breakEvenGuests",
+                  "label": "Guests needed to cover expense",
+                  "format": "number"
+                },
+                {
+                  "key": "firstPositiveGuests",
+                  "label": "First count exceeding expense",
+                  "format": "number"
+                }
+              ]
+            },
+            "comparison": {
+              "title": "Compare financial hurdles",
+              "question": "How do expense and guest thresholds differ across deployments?",
+              "columns": [
+                {
+                  "key": "deployment",
+                  "label": "Deployment",
+                  "format": "name"
+                },
+                {
+                  "key": "expenseMinor",
+                  "label": "Additional expense",
+                  "format": "money"
+                },
+                {
+                  "key": "breakEvenGuests",
+                  "label": "Guests to cover",
+                  "format": "number"
+                },
+                {
+                  "key": "firstPositiveGuests",
+                  "label": "First count exceeding",
+                  "format": "number"
+                }
+              ]
+            },
+            "contextFields": [
+              {
+                "key": "feasible",
+                "label": "Meets operating requirements",
+                "format": "boolean"
+              },
+              {
+                "key": "status",
+                "label": "Threshold status",
+                "format": "name"
+              },
+              {
+                "key": "existingCustomerDiscountLossMinor",
+                "label": "Separate existing-customer discount loss",
+                "format": "money"
+              }
+            ],
+            "details": [
+              {
+                "id": "assumptions",
+                "title": "Contribution and separate losses",
+                "question": "Which reviewed assumptions make this hurdle applicable?",
+                "fields": [
+                  {
+                    "key": "contributionMinor",
+                    "label": "Contribution per genuinely additional guest",
+                    "format": "money"
+                  },
+                  {
+                    "key": "existingCustomerDiscountLossMinor",
+                    "label": "Separate existing-customer discount loss",
+                    "format": "money"
+                  },
+                  {
+                    "key": "recoverableAmountMinor",
+                    "label": "Total amount to recover",
+                    "format": "money"
+                  },
+                  {
+                    "key": "meaning",
+                    "label": "What these thresholds mean"
+                  }
+                ]
+              },
+              {
+                "id": "calculation",
+                "title": "Calculation and basis",
+                "question": "Which recorded amounts produce the whole-guest thresholds?",
+                "fields": [
+                  {
+                    "key": "expenseMinor",
+                    "label": "Incremental deployment expense",
+                    "format": "money"
+                  },
+                  {
+                    "key": "existingCustomerDiscountLossMinor",
+                    "label": "Separate discount loss added once",
+                    "format": "money"
+                  },
+                  {
+                    "key": "recoverableAmountMinor",
+                    "label": "Amount to recover",
+                    "format": "money"
+                  },
+                  {
+                    "key": "contributionMinor",
+                    "label": "Contribution per additional guest",
+                    "format": "money"
+                  },
+                  {
+                    "key": "breakEvenGuests",
+                    "label": "Whole guests to cover expense",
+                    "format": "number"
+                  },
+                  {
+                    "key": "firstPositiveGuests",
+                    "label": "First whole count exceeding expense",
+                    "format": "number"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       }
     }
   },
@@ -953,7 +1073,7 @@
     "sections": [
       {
         "id": "operating-options",
-        "title": "Which deployments meet tonight\u2019s requirements?",
+        "title": "Which deployments meet tonight’s requirements?",
         "value": {
           "op": "if",
           "args": [
@@ -2997,7 +3117,7 @@
         "id": "qualification",
         "title": "What does this review establish?",
         "value": {
-          "meaning": "Fictional one-evening operating review. Complete finite deployments are checked for feasibility; none is ranked as most profitable. Whole-guest thresholds are conditional arithmetic, not demand forecasts or causal evidence. Accepted findings, Sam\u2019s choice, sourced authorization and actual performance remain separate.",
+          "meaning": "Fictional one-evening operating review. Complete finite deployments are checked for feasibility; none is ranked as most profitable. Whole-guest thresholds are conditional arithmetic, not demand forecasts or causal evidence. Accepted findings, Sam’s choice, sourced authorization and actual performance remain separate.",
           "customerResponse": "Unknown; no response forecast is inferred."
         }
       }
@@ -3171,7 +3291,7 @@
       },
       {
         "id": "record-authorization",
-        "label": "Record scoped authorization for Sam\u2019s chosen deployment",
+        "label": "Record scoped authorization for Sam’s chosen deployment",
         "when": {
           "op": "and",
           "args": [

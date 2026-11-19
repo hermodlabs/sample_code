@@ -35,11 +35,25 @@ export async function verify(directory) {
   assert.deepEqual(eligible('changed-staffing'), ['hold']);
   const economics = section(saved.decision.output, 'guest-thresholds');
   assert.deepEqual(economics.map(row => [row.breakEvenGuests, row.firstPositiveGuests]), [[null, null], [5, 6], [10, 11], [16, 17]]);
+  // The UI can render this bounded projection from public SDK output alone.
+  // Its four headline facts do not replace the complete financial records.
+  const financialView = saved.decision.output.questionViews.find(view => view.sectionId === 'guest-thresholds');
+  assert.equal(financialView.status, 'available');
+  assert.equal(financialView.summary.fields.length, 4);
+  assert.equal(financialView.comparison.columns.length, 4);
+  assert.equal(financialView.selection.defaultKey, 'small-standard');
+  assert.deepEqual(financialView.rows.map(row => row.record.breakEvenGuests), economics.map(row => row.breakEvenGuests));
+  assert.equal(financialView.rows.find(row => row.key === 'large-standard').record.feasible, false);
+  // This checkpoint has already been reassessed. Its view must reflect that
+  // new accepted basis, while the earlier chosen push is no longer feasible.
+  const revisedView = saved['changed-staffing'].output.questionViews.find(view => view.id === financialView.id);
+  assert.equal(revisedView.status, 'available');
+  assert.deepEqual(revisedView.rows.filter(row => row.record.feasible).map(row => row.key), ['hold']);
   assert.equal(section(saved.decision.output, 'decision').currentChoice, true);
   assert.equal(section(saved.decision.output, 'decision').specificAuthorizationRecorded, true);
   assert.equal(saved.decision.output.brief.complete, true);
   assert.equal(section(saved['changed-staffing'].output, 'decision').currentChoice, false);
   assert.equal(saved['changed-staffing'].output.brief.complete, false);
   assert(saved['changed-staffing'].run.evaluations.length > saved.decision.run.evaluations.length);
-  console.log(`Verified ${appChecks.summary.total} app scenarios and ${workflowChecks.summary.total} workflow scenarios; complete native reports, $200 choice, 5/6 guest thresholds and reassessment history.`);
+  console.log(`Verified ${appChecks.summary.total} app scenarios and ${workflowChecks.summary.total} workflow scenarios; complete native reports, focused report projections, $200 choice, 5/6 guest thresholds and reassessment history.`);
 }
