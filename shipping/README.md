@@ -1,10 +1,12 @@
 # Shipping samples
 
-Two standalone clients continue the same shipment exception review:
+Standalone clients use the same shipment exception rules and native review format:
 
 | Step | Client | Run from repository root |
 | --- | --- | --- |
 | Identify changed or closing commitments | [Shipment exception queue](shipment-exceptions/README.md), public CLI | `npm run demo:shipment:cli` |
+| Compare shipment revisions and booking cutoffs | [Python shipment review](shipment-review/README.md), Python SDK | `python sample_code/shipping/shipment-review/review_shipments.py --output /tmp/python-shipment-review` |
+| Assess whether a timely registration check is worth buying | [Readiness learning app](readiness-learning/README.md), Python ML and SDK | See its README for model training, estimate review and four worked cases. |
 | Resolve one intervention and retain the handoff | [Shipment Reservation Desk](shipment-reservation-desk/README.md), public SDK | `npm run dev:shipment:react` |
 
 The CLI writes a native `review.json` for each calculated shipment. Import that
@@ -18,7 +20,12 @@ Saving or exporting preserves edited inputs as awaiting review rather than
 accepting them. The SDK retains complete outputs while the clients present the
 few findings needed for the next decision.
 
-Both clients use the new cost-first app and source-aware operating workflow.
+The Python sample retains `review.workflow.json` for each scenario, including
+its provisional calculation, original case and source receipts. It can continue
+in the same React desk; imported business answers still await explicit review.
+Its README covers the bundled-runtime wheel and editable development setup.
+
+All clients use the new cost-first app and source-aware operating workflow.
 Authored quote validity and individual booking cutoffs make time consequential.
 A reservation does not prove delivery; an escalation or revised customer promise
 does not satisfy the original promise. All records are fictional and no external
